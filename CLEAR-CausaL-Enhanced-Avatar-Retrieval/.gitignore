@@ -4,6 +4,5 @@
 *.onnx
 *.h5
 *.model
+*_backup*
 .ipynb_checkpoints
-__pycache__
-*.pyc
