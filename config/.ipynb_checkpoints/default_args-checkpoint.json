@@ -1,0 +1,15 @@
+{
+    
+    "flickr30k_entities": {
+        "root_dir": "/root/onethingai-tmp/avatar/data",
+        "topk_eval": 30,
+        "topk_test": 30,
+        "n_eval": 100,
+        "n_total_steps": 150,
+        "n_examples": 50,
+        "batch_size": 20,
+        "num_processes": 4,
+        "use_causal": false,
+        "causal_weight": 0.1
+    }
+}
