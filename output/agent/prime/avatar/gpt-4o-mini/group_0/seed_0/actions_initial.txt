@@ -1,0 +1,49 @@
+```python
+# Import necessary packages
+import torch
+from typing import Dict, List
+
+parameter_dict = {
+    'similarity_threshold': 0.80,
+    'k_chunks': 3,
+    'chunk_size': 256
+}
+
+def get_node_score_dict(query: str, candidate_ids: List[int], **parameter_dict) -> Dict[int, float]:
+    node_score_dict = {}
+    
+    # Step 1: Compute embeddings for the query
+    query_embedding = get_text_embedding(query)
+    
+    # Step 2: Get embeddings for candidate node IDs
+    candidate_embeddings = get_node_embedding(candidate_ids)
+    
+    # Step 3: Compute query-node cosine similarities
+    similarity_scores = compute_cosine_similarity(query_embedding, candidate_embeddings)
+
+    # Step 4: Process each candidate node
+    for idx, node_id in enumerate(candidate_ids):
+        score = similarity_scores[0][idx].item()  # Get the similarity score
+        if score >= parameter_dict.get('similarity_threshold', 0.80):
+            node_score_dict[node_id] = score
+        else:
+            node_score_dict[node_id] = 0  # Set to 0 for nodes below the threshold
+    
+    # Optional: Get additional relevant information if needed
+    additional_info = get_relation_info(candidate_ids)
+    debug_print(f"Additional info: {additional_info}")
+    
+    # Optional: Evaluate scores with LLM for refining results
+    refined_scores = get_scores_by_llm(candidate_ids, query)
+    for idx, node_id in enumerate(candidate_ids):
+        if node_id in node_score_dict:
+            node_score_dict[node_id] *= refined_scores[idx]  # Refine scores based on LLM feedback
+    
+    return node_score_dict
+
+# Example usage:
+# candidate_node_ids = [101, 102, 103, ...]  # Example candidate IDs
+# query_example = "Which cellular structures engage with the genomic or proteomic targets of Etiprednol Dicloacetate?"
+# node_scores = get_node_score_dict(query_example, candidate_node_ids)
+# print(node_scores)
+```

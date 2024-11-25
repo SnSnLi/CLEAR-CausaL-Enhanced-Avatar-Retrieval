@@ -1,0 +1,7 @@
+llm2vec==0.2.2
+transformers==4.39.1  # 或者选择4.39.1到4.40.2之间的任意版本
+tensorflow==2.16.1
+protobuf==3.20.3  # 或者选择3.20.3到4.20.x之间的任意版本，但不能是4.21.x
+torchaudio==2.2.0+cu121
+torchvision==0.17.0+cu121
+xformers==0.0.24

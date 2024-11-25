@@ -1,0 +1,129 @@
+[33mcommit 9942c195fbc1cdfc76ffb710e9cebe48bc0ed31b[m[33m ([m[1;36mHEAD -> [m[1;32mmain[m[33m)[m
+Author: SnSnLi <z15603010011@163.com>
+Date:   Mon Nov 25 15:35:31 2024 +0800
+
+    初始提交
+
+[33mcommit 7ec2caf646d0fb1db8ea7de8b1f4ff9b8b35db01[m
+Author: zsyJosh <61644849+zsyJosh@users.noreply.github.com>
+Date:   Mon Sep 30 20:45:18 2024 -0700
+
+    Update README, bash scripts
+
+[33mcommit d106e5b8b7a8ac320b6abfafef5cc42cfc4a2797[m
+Author: zsyJosh <61644849+zsyJosh@users.noreply.github.com>
+Date:   Mon Sep 30 20:37:41 2024 -0700
+
+    feat(tool_api): update api with tools for React
+
+[33mcommit 1548eb1d2a6eb2b404890e233f468bd31e070c08[m
+Author: zsyJosh <61644849+zsyJosh@users.noreply.github.com>
+Date:   Mon Sep 30 20:34:16 2024 -0700
+
+    feat(eval): update eval script for React
+
+[33mcommit dd7e107843b72f0e5ac59eecf64ea9b803fae7e9[m
+Author: zsyJosh <61644849+zsyJosh@users.noreply.github.com>
+Date:   Mon Sep 30 20:33:26 2024 -0700
+
+    feat(React): add React baseline
+
+[33mcommit 19c8b4f035caf82f9ddfeb0bdbb374bf7afcc574[m
+Author: zsyJosh <61644849+zsyJosh@users.noreply.github.com>
+Date:   Mon Sep 30 20:32:19 2024 -0700
+
+    feat(tool): add React tool list
+
+[33mcommit 8d65240b2d6960b3ba8479c3ebe577a9cce70a80[m
+Author: zsyJosh <61644849+zsyJosh@users.noreply.github.com>
+Date:   Mon Sep 30 20:28:54 2024 -0700
+
+    feat(prompt): update React prompt
+
+[33mcommit 64a3cf2a9ca4bf72a5b47ab7e8a3de6c83498146[m
+Author: zsyJosh <61644849+zsyJosh@users.noreply.github.com>
+Date:   Mon Sep 30 10:55:10 2024 -0700
+
+    Update README
+
+[33mcommit a2e63dafe19d20aec82e069dccbde71b71cfb2cb[m
+Author: Shirley Wu <52750087+Wuyxin@users.noreply.github.com>
+Date:   Thu Sep 26 19:33:32 2024 +0800
+
+    Update README.md
+
+[33mcommit 8161beaaa0428287017dd3509e18f547b5beaae8[m
+Author: Shirley Wu <52750087+Wuyxin@users.noreply.github.com>
+Date:   Mon Aug 12 13:08:54 2024 -0700
+
+    Update README.md
+
+[33mcommit 9f6fb7ad98131d9c632bf5c53121ebdeb8be99e0[m
+Author: Shirley Wu <52750087+Wuyxin@users.noreply.github.com>
+Date:   Mon Aug 12 13:04:26 2024 -0700
+
+    Update README.md
+
+[33mcommit b5d98896d8780831f23b22f1134286d962ed2834[m
+Author: Herumb Shandilya <43719685+krypticmouse@users.noreply.github.com>
+Date:   Wed Jul 24 04:04:30 2024 +0530
+
+    Add DSPy <> Avatar steps
+
+[33mcommit 64c9d316d4f6991dd88a4aa1dfbadd15c024f81f[m
+Author: Shirley Wu <52750087+Wuyxin@users.noreply.github.com>
+Date:   Mon Jul 8 14:51:37 2024 -0700
+
+    Update README.md
+
+[33mcommit 8f1e7175ae567832fe3b9fcdf7cfda3334775d5a[m
+Author: Shirley Wu <52750087+Wuyxin@users.noreply.github.com>
+Date:   Mon Jul 8 12:51:25 2024 -0700
+
+    Update README.md
+
+[33mcommit 7aab2aeda47de3f59e467eff1e5e6bd76c5d7918[m
+Merge: 48d6592 69bfca4
+Author: Shirley Wu <52750087+Wuyxin@users.noreply.github.com>
+Date:   Sun Jul 7 13:55:38 2024 -0700
+
+    Merge pull request #1 from sanowl/feature/enhance-eval-actions-script
+    
+    Update eval_avatar_by_indices.py
+
+[33mcommit 69bfca4c9712d9e149c01f24639a17da150bc2b3[m
+Author: San <99511815+sanowl@users.noreply.github.com>
+Date:   Sat Jul 6 14:51:53 2024 +0300
+
+    Update eval_avatar_by_indices.py
+
+[33mcommit 48d6592b96dcb17a263c2587f54bf2099279dcd6[m
+Author: Wuyxin <wuyxinsh@gmail.com>
+Date:   Wed Jun 26 10:50:02 2024 -0700
+
+    remove pdb
+
+[33mcommit 555aee2f3ba8be0024211d5edf579902fb85b296[m
+Merge: fa61e31 3919836
+Author: Wuyxin <wuyxinsh@gmail.com>
+Date:   Tue Jun 25 18:52:33 2024 -0700
+
+    Merge branch 'main' of github.com:zou-group/avatar into main
+
+[33mcommit fa61e31f8f7890459efa0beb43a282d5ef0b1435[m
+Author: Wuyxin <wuyxinsh@gmail.com>
+Date:   Tue Jun 25 18:51:56 2024 -0700
+
+    first release
+
+[33mcommit 3919836d3f9ccf386a3b8841775c73ba278ce00d[m
+Author: Shirley Wu <52750087+Wuyxin@users.noreply.github.com>
+Date:   Mon Jun 17 18:44:54 2024 -0700
+
+    Update README.md
+
+[33mcommit 85a5b58e946b943fdb92d064bb2ea00abb53ff0b[m
+Author: Wuyxin <wuyxinsh@gmail.com>
+Date:   Mon Jun 17 18:35:59 2024 -0700
+
+    first commit

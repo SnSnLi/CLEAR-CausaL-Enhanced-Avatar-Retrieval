@@ -1,0 +1,90 @@
+```python
+# The feedback indicates a runtime error due to an attempt to use CUDA when no GPUs are available. This occurs in the part of the code where embeddings are manipulated and similarity is calculated. To address this, I will ensure that all tensor operations consistently use the CPU. This includes modifying parts of the code that previously assumed GPU access and explicitly transferring computations to CPU where applicable.
+
+# Additionally, the debug_print function had no output, indicating that there were likely early returns or issues in the filtering processes that prevented debug messages from being triggered. I will improve the logging by adding checks and outputs at critical points in the code to ensure that we capture relevant events and data for debugging purposes.
+
+import torch
+from typing import Dict, List
+
+# Parameter dictionary for configurable options
+parameter_dict = {
+    'similarity_threshold': 0.70,  # Threshold for candidate filtering
+    'k_chunks': 3,                  # Max chunks for relevant information extraction
+    'chunk_size': 256,              # Size of each extracted chunk
+    'debug_mode': True,             # Enable debug mode for detailed logging
+}
+
+def debug_print(message: str) -> None:
+    """Utility function to print debug messages if debug mode is enabled."""
+    if parameter_dict.get('debug_mode', False):
+        print(message)  # Output debug messages for tracing
+
+def compute_similarity_score(query_embedding: torch.Tensor, candidate_embeddings: torch.Tensor) -> torch.Tensor:
+    """Compute cosine similarity scores between the query and candidate embeddings on CPU."""
+    return compute_cosine_similarity(query_embedding.detach().cpu(), candidate_embeddings.detach().cpu())  # Compute on CPU
+
+def extract_node_embeddings(node_ids: List[int]) -> torch.Tensor:
+    """Fetch node embeddings, ensuring they are processed on CPU for stability."""
+    embeddings = get_node_embedding(node_ids)
+    if embeddings is None or len(embeddings) == 0:
+        debug_print("Failed to retrieve node embeddings. Returning empty tensor.")
+        return torch.tensor([])  # Return an empty tensor on failure
+    return embeddings.detach().cpu()  # Ensure embeddings are on CPU
+
+def filter_candidate_nodes_by_query(query: str, candidate_ids: List[int]) -> List[int]:
+    """Filter candidate nodes based on their relevance to the input query using LLM scoring."""
+    scores = get_scores_by_llm(node_ids=candidate_ids, query=query)  # Get scores from LLM
+    filtered_nodes = [candidate_ids[i] for i in range(len(candidate_ids)) if scores[i] > parameter_dict['similarity_threshold']]
+    
+    # Log debug information about filtered nodes
+    debug_print(f"Filtered candidate nodes based on query '{query}': {filtered_nodes} (Scores: {scores})")
+    
+    return filtered_nodes
+
+def get_node_score_dict(query: str, candidate_ids: List[int], **parameter_dict) -> Dict[int, float]:
+    node_score_dict = {}
+
+    # Step 1: Check for valid input
+    if not query:
+        debug_print("Query is empty. Exiting function.")
+        return node_score_dict  # Early return if the query is empty
+
+    if not candidate_ids:
+        debug_print("No candidate IDs provided. Exiting function.")
+        return node_score_dict  # Early return if no candidate IDs
+
+    # Step 2: Obtain the query embedding on CPU
+    query_embedding = get_text_embedding(query).detach().cpu()  # Keep query on CPU
+    if query_embedding is None or query_embedding.size(0) == 0:
+        debug_print("Invalid query embedding retrieved. Exiting function.")
+        return node_score_dict  # Exit if the query embedding is invalid
+
+    # Step 3: Filter candidates based on relevance
+    candidate_ids = filter_candidate_nodes_by_query(query, candidate_ids)
+    if not candidate_ids:
+        debug_print("No suitable candidates found after filtering. Exiting function.")
+        return node_score_dict  # Exit if no valid candidates remain
+
+    # Step 4: Retrieve and ensure candidate node embeddings are on CPU
+    candidate_embeddings = extract_node_embeddings(candidate_ids)
+    if candidate_embeddings.size(0) == 0:
+        debug_print("Candidate embeddings are invalid. Exiting function.")
+        return node_score_dict  # Exit if embeddings are invalid
+
+    # Step 5: Log dimensions of embeddings for debugging
+    debug_print(f"Query embedding size: {query_embedding.size()}, Candidate embedding size: {candidate_embeddings.size()}")
+
+    # Step 6: Calculate similarity scores for each candidate
+    similarity_scores = compute_similarity_score(query_embedding, candidate_embeddings)
+
+    # Step 7: Construct the node_score_dict based on computed similarity scores
+    for idx, node_id in enumerate(candidate_ids):
+        score = similarity_scores[idx].item()  # Extract scalar score
+        if score >= parameter_dict.get('similarity_threshold', 0.70):
+            node_score_dict[node_id] = score  # Store valid scores in the dictionary
+
+    # Step 8: Log calculated scores for the query
+    debug_print(f"Node scores calculated for query: '{query}': {node_score_dict}")
+
+    return node_score_dict
+```
