@@ -78,7 +78,7 @@ def get_gpt4v_output(image: Image.Image,
                      max_tokens: int = 1024, 
                      max_retry: int = 10, 
                      sleep_time: int = 10,
-                     timeout: int = 60,
+                     timeout: int = 120,
                      json_object: bool = False,
                      **kwargs) -> Dict:
     if json_object:
@@ -107,7 +107,7 @@ def get_gpt4v_output(image: Image.Image,
         payload['response_format'] = {"type": "json_object"}
     for cnt in range(max_retry):
         try:
-            response = requests.post("https://chat.cloudapi.vip/v1/chat/completions", 
+            response = requests.post("https://api.openai.com/v1/chat/completions", 
                                      headers=headers, json=payload, timeout=timeout)
             result = response.json()['choices'][0]['message']['content']
         except Exception as e:
