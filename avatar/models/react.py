@@ -19,6 +19,13 @@ from avatar.utils.error_handler import string_exec_error_handler
 from avatar.utils.image import image_to_base64
 
 class ReactEnv:
+    @staticmethod
+    def safe_call(func, *args, default=None, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            print(f'Exception: {str(e)}. Returning default: {default}')
+            return default
     def __init__(
         self,
         database,
@@ -821,7 +828,9 @@ class React(ModelForQA):
                 string_exec_error_handler(err, code)
             else:
                 traceback.print_exc()
-        if globals().get("get_node_score_dict") is None:
+        #if globals().get("get_node_score_dict") is None:
+        if 'get_node_score_dict' not in globals():
+    
             fail_exec = True
         if globals().get("parameter_dict") is None:
             fail_exec = True

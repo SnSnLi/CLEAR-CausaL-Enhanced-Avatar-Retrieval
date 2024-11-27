@@ -7,6 +7,13 @@ import torch.nn as nn
 from stark_qa.tools.api import get_openai_embedding
 from stark_qa.evaluator import Evaluator
 from avatar.tools import GetCLIPTextEmbedding
+from transformers import AutoModel
+from .feature_extractor import FeatureExtractor
+from .causal_graph_learning import CausalGraphLearning
+from .causal_attention import CausalAttention
+from .retrieval_model import RetrievalModel
+from .evaluator import Evaluator
+from pathlib import Path as osp
 
 
 class ModelForQA(nn.Module):
@@ -25,6 +32,30 @@ class ModelForQA(nn.Module):
         self.num_candidates = kb.num_candidates
         self.query_emb_dict = {}
         self.evaluator = Evaluator(self.candidate_ids)
+        # 原有的特征提取器和编码器
+        self.feature_extractor = FeatureExtractor(config)
+        self.text_encoder = AutoModel.from_pretrained(config.text_encoder_name)
+        
+        # 新增：因果图学习模块
+        self.causal_graph_learner = CausalGraphLearning(
+            feature_dim=config.hidden_size,
+            hidden_dim=config.hidden_size
+        )
+        
+        # 新增：因果注意力模块
+        self.causal_attention = CausalAttention(
+            hidden_dim=config.hidden_size
+        )
+        
+        # 新增：检索模型
+        self.retrieval_model = RetrievalModel(
+            feature_dim=config.hidden_size,
+            hidden_dim=config.hidden_size,
+            output_dim=config.hidden_size
+        )
+
+
+    
     
     def forward(self, 
                 query: Union[str, List[str]], 
@@ -42,7 +73,47 @@ class ModelForQA(nn.Module):
         Returns:
             pred_dict (dict): A dictionary of predicted scores or answer ids.
         """
-        raise NotImplementedError
+        if isinstance(query, str):
+            query = [query]
+        if isinstance(query_id, int):
+            query_id = [query_id]
+        
+        # 获取查询嵌入
+        query_embs = []
+        for q, q_id in zip(query, query_id):
+            query_emb = self.get_query_emb(q, q_id)
+            query_embs.append(query_emb)
+        query_embs = torch.stack(query_embs)
+        
+        # 提取特征
+        visual_features = self.feature_extractor(kwargs['images'])
+        text_features = query_embs
+        
+        # 因果增强的检索
+        retrieval_outputs = self.retrieval_model(
+            images=visual_features['global_features'],
+            texts=text_features
+        )
+        
+        # 整理输出
+        outputs = {
+            'visual_features': visual_features,
+            'text_features': text_features,
+            'matching_scores': retrieval_outputs['matching_scores'],
+            'causal_info': retrieval_outputs['causal_info'],
+            'img_features': retrieval_outputs['img_features'],
+            'text_features': retrieval_outputs['text_features']
+        }
+        
+        # 计算损失（如果在训练阶段）
+        if self.training and 'labels' in kwargs:
+            retrieval_loss = self.retrieval_model.compute_loss(
+                retrieval_outputs['matching_scores'],
+                kwargs['labels']
+            )
+            outputs['loss'] = retrieval_loss
+        
+        return outputs
     
     def get_query_emb(self, 
                        query: str, 
@@ -77,6 +148,14 @@ class ModelForQA(nn.Module):
                 query_emb = get_openai_embedding(query, model=self.emb_model)
                 torch.save(query_emb, query_emb_path)
         return query_emb
+
+    def compute_similarity(self, visual_features, text_features):
+        """使用因果增强的匹配分数替代简单的相似度计算"""
+        retrieval_outputs = self.retrieval_model(
+            images=visual_features,
+            texts=text_features
+        )
+        return retrieval_outputs['matching_scores']
     
     def evaluate(self, 
                  pred_dict: Dict[int, float], 
@@ -96,3 +175,22 @@ class ModelForQA(nn.Module):
             Dict[str, float]: A dictionary of evaluation metrics.
         """
         return self.evaluator(pred_dict, answer_ids, metrics)
+
+def build_avatar_model(config):
+    # 添加因果检索相关的配置
+    if not hasattr(config, 'causal_hidden_dim'):
+        config.causal_hidden_dim = config.hidden_size
+    if not hasattr(config, 'causal_output_dim'):
+        config.causal_output_dim = config.hidden_size
+    
+    model = ModelForQA(kb=config.kb, config=config)
+    
+    # 加载预训练权重
+    if config.pretrained_path:
+        state_dict = torch.load(
+            config.pretrained_path,
+            map_location='cpu'
+        )
+        model.load_state_dict(state_dict)
+    
+    return model
