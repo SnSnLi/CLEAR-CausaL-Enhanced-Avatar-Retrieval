@@ -7,6 +7,10 @@ from .avatar import AvaTaR
 from .llmv_reranker import LLMvReranker
 from .dense_retriever import DenseRetrieval
 from .react import React
+from .causal_graph_definition import CausalGraphBuilder
+from .causal_discovery import CausalDiscovery
+from .counterfactual_reasoning import CounterfactualReasoning
+from .causal_model import CausalModel
 
 
 def get_model(args, kb):
