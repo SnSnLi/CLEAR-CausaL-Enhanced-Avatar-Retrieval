@@ -2,14 +2,14 @@ import os
 import torch
 import logging
 from tqdm import tqdm
-from typing import Dict, Optional
+from typing import Optional
 
 from avatar.models import AvatarModel
-from avatar.datasets import RetrievalDataset
+from avatar.datasets import RetrievalDataset  
 from avatar.utils.metrics import compute_metrics
 from configs.retrieval_config import RetrievalConfig
 
-class RetrievalTrainer:
+class CausalTrainer:
     def __init__(
         self,
         model: AvatarModel,
@@ -35,34 +35,19 @@ class RetrievalTrainer:
         self.model.train()
         total_steps = 0
         best_metric = float('-inf')
-
-        outputs = self.model(**batch)
-        original_loss = outputs.loss
-
-        # 添加反事实损失
-        cf_loss = self.model.cf_reasoner.counterfactual_loss(
-            orig_features=outputs.features,
-            cf_features=outputs.cf_features,
-            labels=batch['labels'],
-            intervention_var='image_features'
-        )
         
-        # 组合损失
-        total_loss = original_loss + self.config.cf_weight * cf_loss
-        total_loss.backward()
-    
         for epoch in range(self.config.max_epochs):
             epoch_loss = 0
-            progress_bar = tqdm(self.train_dataloader)
+            progress_bar = tqdm(enumerate(self.train_dataset), total=len(self.train_dataset))
             
-            for step in progress_bar:
-                
+            for step, batch in progress_bar:
                 batch = {k: v.to(self.device) for k, v in batch.items()}
                 
                 self.optimizer.zero_grad()
-                outputs = self.model(**batch)
-
-                outputs['loss'].backward()
+                outputs = self.model(**batch)  # 模型前向传播会调用已实现的因果推理逻辑
+                loss = outputs.loss
+                
+                loss.backward()
                 self.optimizer.step()
                 
                 epoch_loss += loss.item()
@@ -74,9 +59,8 @@ class RetrievalTrainer:
                     metrics = self.evaluate()
                     self.model.train()
                     
-                    # Save best model
-                    if metrics['mrr'] > best_metric:
-                        best_metric = metrics['mrr']
+                    if metrics['causal_score'] > best_metric:
+                        best_metric = metrics['causal_score']
                         self.save_model()
                         
             avg_loss = epoch_loss / (step + 1)
@@ -87,27 +71,32 @@ class RetrievalTrainer:
         if self.eval_dataset is None:
             return {}
             
+        metrics = {}
         all_predictions = []
         all_labels = []
         
         with torch.no_grad():
-            for i in range(0, len(self.eval_dataset), self.config.eval_batch_size):
-                batch = self.eval_dataset.get_batch(self.config.eval_batch_size)
+            for batch in self.eval_dataset:
                 batch = {k: v.to(self.device) for k, v in batch.items()}
-                
                 outputs = self.model(**batch)
-                predictions = outputs.logits.argmax(dim=-1)
                 
+                predictions = outputs.logits.argmax(dim=-1)
                 all_predictions.extend(predictions.cpu().numpy())
                 all_labels.extend(batch['labels'].cpu().numpy())
                 
-        metrics = compute_metrics(all_predictions, all_labels)
+                
+                metrics.update(outputs.metrics)
+        
+        
+        retrieval_metrics = compute_metrics(all_predictions, all_labels)
+        metrics.update(retrieval_metrics)
+        
         logging.info(f"Evaluation metrics: {metrics}")
         return metrics
         
     def save_model(self, path: Optional[str] = None):
         if path is None:
-            path = f"checkpoints/{self.config.dataset}_model.pt"
+            path = f"checkpoints/{self.config.dataset}_causal_model.pt"
         os.makedirs(os.path.dirname(path), exist_ok=True)
         torch.save(self.model.state_dict(), path)
         
