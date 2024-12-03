@@ -16,6 +16,28 @@ def parse_args():
     parser.add_argument("--device", type=str, default="cuda")
     return parser.parse_args()
 
+def causal_mediation_analysis(adj_matrix, features, treatment, mediator, outcome):
+    """计算因果中介效应"""
+    direct_effect = compute_direct_effect(adj_matrix, features, treatment, outcome)
+    indirect_effect = compute_indirect_effect(adj_matrix, features, treatment, mediator, outcome)
+    total_effect = direct_effect + indirect_effect
+    
+    return {
+        "natural_direct_effect": direct_effect,
+        "natural_indirect_effect": indirect_effect,
+        "total_effect": total_effect
+    }
+
+def compute_direct_effect(adj_matrix, features, treatment, outcome):
+    treatment_effect = (adj_matrix[:, treatment] * features[:, outcome]).mean()
+    return float(treatment_effect)
+
+def compute_indirect_effect(adj_matrix, features, treatment, mediator, outcome):
+    path1 = adj_matrix[:, treatment] * features[:, mediator]
+    path2 = adj_matrix[:, mediator] * features[:, outcome]
+    indirect_effect = (path1 * path2).mean()
+    return float(indirect_effect)
+
 def evaluate_causal_effects(model, test_data, config):
     results = {
         "direct_effects": [],
@@ -30,7 +52,6 @@ def evaluate_causal_effects(model, test_data, config):
             features = features.to(args.device)
             adj_matrix = adj_matrix.to(args.device)
             
-            # 计算因果效应
             for i in range(features.size(0)):
                 effects = causal_mediation_analysis(
                     adj_matrix,
@@ -41,7 +62,7 @@ def evaluate_causal_effects(model, test_data, config):
                 )
                 
                 results["direct_effects"].append(effects["natural_direct_effect"])
-                results["indirect_effects"].append(effects["natural_indirect_effect"])
+                results["indirect_effects"].append(effects["natural_indirect_effect"]) 
                 results["total_effects"].append(effects["total_effect"])
     
     return results
@@ -50,20 +71,15 @@ def main():
     args = parse_args()
     config = RetrievalConfig()
     
-    # 加载模型
     model = CausalModel(
         hidden_size=config.causal_hidden_dim,
         output_size=config.causal_output_dim
     ).to(args.device)
     model.load_state_dict(torch.load(args.model_path))
     
-    # 加载测试数据
     test_data = load_flickr30k_data(split="test")
-    
-    # 评估因果效应
     results = evaluate_causal_effects(model, test_data, config)
     
-    # 输出结果
     os.makedirs(args.output_dir, exist_ok=True)
     output_file = os.path.join(args.output_dir, "causal_effects.txt")
     
