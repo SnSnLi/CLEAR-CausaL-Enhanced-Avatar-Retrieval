@@ -4,18 +4,18 @@ import logging
 from tqdm import tqdm
 from typing import Dict, Optional
 
-from avatar.models import AvatarModel
-from avatar.datasets import RetrievalDataset
+from avatar.models import QADataset
+from avatar.kb.flickr30k_entities import Flickr30kEntities
 from avatar.utils.metrics import compute_metrics
 from configs.retrieval_config import RetrievalConfig
 
 class RetrievalTrainer:
     def __init__(
         self,
-        model: AvatarModel,
+        model: AvaTaR,
         config: RetrievalConfig,
-        train_dataset: RetrievalDataset,
-        eval_dataset: Optional[RetrievalDataset] = None,
+        train_dataset: Flickr30kEntities,
+        eval_dataset: Optional[Flickr30kEntities] = None,
     ):
         self.model = model
         self.config = config
