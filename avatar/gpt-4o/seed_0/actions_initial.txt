@@ -1,0 +1,74 @@
+```python
+import torch
+from typing import List, Dict
+from PIL import Image
+from collections import defaultdict
+
+# Define the parameter dictionary
+parameter_dict = {
+    'clip_weight': 0.5,
+    'text_info_weight': 0.3,
+    'patch_weight': 0.2
+}
+
+def parse_attributes(query):
+    # Example attributes extraction function
+    attributes_to_extract = ["subject", "action", "object", "location"]
+    return parse_query(query, attributes_to_extract)
+
+def compute_combined_score(query_embedding, candidate_embeddings, weights):
+    # Compute cosine similarity
+    cosine_similarities = compute_cosine_similarity(query_embedding, candidate_embeddings)
+    
+    # Apply weights to compute a single score
+    combined_score = weights['clip_weight'] * cosine_similarities
+    return combined_score
+
+def get_node_score_dict(query: str, candidate_ids: List[int], **parameter_dict):
+    # Default weights can be overridden by passed **parameter_dict
+    clip_weight = parameter_dict.get('clip_weight', 0.5)
+    text_info_weight = parameter_dict.get('text_info_weight', 0.3)
+    patch_weight = parameter_dict.get('patch_weight', 0.2)
+
+    # Parse the query into attributes
+    parsed_query = parse_attributes(query)
+    debug_print(f'Parsed Query: {parsed_query}')
+
+    # Get image-related information
+    images = get_images(candidate_ids)
+    text_info_list = get_text_info(candidate_ids)
+    patch_to_phrase_list = get_patch_id_to_phrase_dict(candidate_ids)
+
+    # Get the CLIP text embeddings
+    query_embedding = get_clip_text_embedding(query)
+    text_info_embeddings = get_clip_text_embedding(text_info_list)
+
+    # Get the CLIP image embeddings
+    image_embeddings = get_clip_image_embedding(images)
+
+    # Compute scores using embeddings
+    clip_similarity_scores = compute_combined_score(query_embedding, image_embeddings, {'clip_weight': clip_weight})
+    text_info_similarity_scores = compute_combined_score(query_embedding, text_info_embeddings, {'clip_weight': text_info_weight})
+
+    # Aggregate scores into a node score dictionary
+    node_score_dict = defaultdict(float)
+    for idx, node_id in enumerate(candidate_ids):
+        score = clip_similarity_scores[0, idx].item() * clip_weight + text_info_similarity_scores[0, idx].item() * text_info_weight
+        node_score_dict[node_id] = score
+
+    # Compute patch-level scores to enhance/supplement overall score
+    for idx, patch_dict in enumerate(patch_to_phrase_list):
+        patch_scores = []
+        for patch_id, phrases in patch_dict.items():
+            # Use F1 score to evaluate phrase matching
+            f1_scores = compute_f1(parsed_query['object'], phrases)
+            patch_scores.append(max(f1_scores))
+        
+        if patch_scores:
+            max_patch_score = max(patch_scores)
+            node_score_dict[candidate_ids[idx]] += max_patch_score * patch_weight
+
+    return dict(node_score_dict)
+```
+
+This code provides a structured approach for conducting image retrieval by calculating a score for each of the candidate image nodes based on their relevance to a given query. It combines the embeddings from CLIP and evaluates text and patch-level matching. The score computation involves cosine similarity similarity using CLIP and optional enhancements through patch-level analysis. By modularizing with adjustable weights, the approach accommodates specific query relevancy factors efficiently.

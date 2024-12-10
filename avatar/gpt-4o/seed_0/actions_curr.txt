@@ -1,0 +1,99 @@
+```python
+# Analysis on the feedback and explanations on the code modification:
+# The error message indicates that there is an attempt to access the `__name__` attribute of an object that does not have it. 
+# This issue arises in the `safe_call` function when we try to print the function name using `func.__name__`.
+# To fix this, we'll modify the exception handling message in `safe_call` to not rely on `func.__name__`.
+# Additionally, checking the error message and hinted handling of exceptions indicates possible problems with calls to other API functions, which need more robust handling.
+# We should also refine scoring logic and debugging to ensure valid computations and correct weights application.
+
+import torch
+from typing import List, Dict
+from PIL import Image
+from collections import defaultdict
+
+parameter_dict = {
+    'clip_weight': 0.5,
+    'text_info_weight': 0.3,
+    'patch_weight': 0.2
+}
+
+def parse_query_into_attributes(query: str):
+    # Extract key components from the query
+    attributes = ["subject", "action", "object", "location"]
+    parsed_attributes = parse_query(query, attributes)
+    debug_print(f'Parsed Query: {parsed_attributes}')
+    return parsed_attributes
+
+def compute_score(query_embedding, candidate_embeddings, weight):
+    # Calculate cosine similarity and apply weight
+    cosine_similarities = compute_cosine_similarity(query_embedding, candidate_embeddings)
+    return weight * cosine_similarities.squeeze()
+
+def safe_call(func, *args, default=None, **kwargs):
+    try:
+        return func(*args, **kwargs)
+    except Exception as e:
+        debug_print(f'Exception: {str(e)}. Returning default: {default}')
+        return default
+
+def filter_non_empty_strings(strings):
+    return [s for s in strings if len(s) > 0]
+
+def get_node_score_dict(query: str, candidate_ids: List[int], **parameter_dict):
+    # Use provided parameters or defaults
+    clip_weight = parameter_dict.get('clip_weight', 0.5)
+    text_info_weight = parameter_dict.get('text_info_weight', 0.3)
+    patch_weight = parameter_dict.get('patch_weight', 0.2)
+
+    # Parsing the query
+    parsed_query = parse_query_into_attributes(query)
+
+    # Fetch image-related information safely
+    images = get_images(candidate_ids)
+    text_info_list = safe_call(get_text_info, candidate_ids, default=[""] * len(candidate_ids))
+    patch_to_phrase_list = safe_call(get_patch_id_to_phrase_dict, candidate_ids, default=[{}] * len(candidate_ids))
+    
+    # Filter non-empty text info for embedding
+    valid_text_info_list = filter_non_empty_strings(text_info_list)
+    try:
+        text_info_embeddings = get_clip_text_embedding(valid_text_info_list) if valid_text_info_list else torch.empty(0)
+    except Exception as e:
+        debug_print(f'Failed to embed text info: {str(e)}')
+        text_info_embeddings = torch.empty(0)
+    
+    query_embedding = get_clip_text_embedding(query)
+    image_embeddings = get_clip_image_embedding(images)
+
+    # Initialize node scores
+    node_score_dict = defaultdict(float)
+    
+    # Compute scores based on image embeddings
+    clip_similarity_scores = compute_score(query_embedding, image_embeddings, clip_weight)
+
+    if valid_text_info_list:
+        text_info_similarity_scores = compute_score(query_embedding, text_info_embeddings, text_info_weight)
+    else:
+        text_info_similarity_scores = torch.zeros(len(candidate_ids))
+
+    for idx, node_id in enumerate(candidate_ids):
+        score = clip_similarity_scores[idx].item()
+        if text_info_similarity_scores.numel() > idx:
+            score += text_info_similarity_scores[idx].item()
+        node_score_dict[node_id] = score
+
+    # Incorporate patch-level scores
+    for idx, patch_dict in enumerate(patch_to_phrase_list):
+        if patch_dict:
+            patch_scores = []
+            for patch_id, phrases in patch_dict.items():
+                object_phrases = parsed_query['object']
+                if object_phrases != 'NA':
+                    f1_scores = compute_f1(object_phrases, phrases)
+                    patch_scores.append(max(f1_scores))
+
+            if patch_scores:
+                max_patch_score = max(patch_scores)
+                node_score_dict[candidate_ids[idx]] += max_patch_score * patch_weight
+
+    return dict(node_score_dict)
+```
