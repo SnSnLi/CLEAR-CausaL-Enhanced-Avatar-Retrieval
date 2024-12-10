@@ -1,3 +1,0 @@
-Parsed Query: {'subject': 'A little boy', 'action': 'stands', 'object': 'with a goose', 'location': 'in a park'}
-Exception: 'patches'. Returning default: ['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '']
-Exception: 'patches'. Returning default: [{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}]
