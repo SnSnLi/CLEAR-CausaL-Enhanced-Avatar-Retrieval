@@ -18,7 +18,15 @@ from avatar.tools.react.api import get_llm_output_tools
 from avatar.utils.error_handler import string_exec_error_handler
 from avatar.utils.image import image_to_base64
 
+
 class ReactEnv:
+    @staticmethod
+    def safe_call(func, *args, default=None, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            print(f'Exception: {str(e)}. Returning default: {default}')
+            return default
     def __init__(
         self,
         database,
@@ -362,7 +370,7 @@ class React(ModelForQA):
         chunk_emb_dir,
         n_init_candidates=20,
         n_limit=100,
-        dataset="amazon",
+        dataset="flickr30k_entities",
         vision=False
     ):
         """
@@ -392,7 +400,28 @@ class React(ModelForQA):
         self.debug_print_path = osp.join(self.debug_print_dir, f"{os.getpid()}.txt")
         os.makedirs(self.debug_print_dir, exist_ok=True)
         self.parent_vss = VSS(database, query_emb_dir, node_emb_dir)
+        self.discovery_model = Discovery()
+        self.definition_model = Definition()
+        
+    def extract_causal_features(self, img_features, text_features):
+        # 调用Discovery和Definition获取因果信息
+        definition_out = self.definition_model(img_features, text_features)
+        discovery_out = self.discovery_model(img_features, text_features, definition_out)
+        
+        return {
+            'definition': definition_out,
+            'discovery': discovery_out,
+            'graph': discovery_out['graph'],
+            'causal_effects': discovery_out['causal_effects']
+        }
 
+    def compute_causal_matching(self, definition_out, discovery_out):
+        return {
+            'semantic_score': definition_out['semantic_loss'],
+            'causal_score': discovery_out['path_strengths'].mean(),
+            'final_score': definition_out['semantic_loss'] * discovery_out['path_strengths'].mean()
+        }
+    
     def step(self, env, action, action_param):
         attempts = 0
         while attempts < 3:
@@ -731,6 +760,16 @@ class React(ModelForQA):
         return done, final_answers, r, info, history, fail_flag
 
     def forward(self, query, query_id=None, in_context_examples=None, key_insights=None, **kwargs: Any):
+        images = kwargs.get('images')
+        texts = kwargs.get('texts') 
+    
+        if images is not None and texts is not None:
+            causal_features = self.extract_causal_features(images, texts)
+            matching_scores = self.compute_causal_matching(
+                causal_features['definition'],
+                causal_features['discovery']
+            )
+  
         print("Start forward")
         fail_flag = 0
         env = ReactEnv(
@@ -745,10 +784,14 @@ class React(ModelForQA):
             n_limit=100,
             initial_temperature=0.2,
             n_init_candidates=self.n_init_candidates,
+            discovery_model=self.discovery_model,  
+            definition_model=self.definition_model,
             use_chunk=False,
         )
         env.reset()
         print("React env setup done")
+        images = env.step('get_image_embedding', {'image_ids': image_ids})
+        texts = env.step('get_text_info', {'image_ids': image_ids})
         prompt, tool_list = self.get_initial_prompt(env, model_name=self.llm_func_model, in_context_examples=in_context_examples)
         print("Prompt setup done")
         # print(f"{prompt=}")
@@ -821,7 +864,9 @@ class React(ModelForQA):
                 string_exec_error_handler(err, code)
             else:
                 traceback.print_exc()
-        if globals().get("get_node_score_dict") is None:
+        #if globals().get("get_node_score_dict") is None:
+        if 'get_node_score_dict' not in globals():
+    
             fail_exec = True
         if globals().get("parameter_dict") is None:
             fail_exec = True
