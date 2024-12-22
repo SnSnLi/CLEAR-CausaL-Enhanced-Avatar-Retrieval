@@ -6,6 +6,8 @@ from tqdm import tqdm
 from avatar.utils.format import format_checked
 from avatar.tools.tool import Tool
 from stark_qa.tools.api import get_openai_embedding, get_openai_embeddings
+from avatar.models.causal_discovery import Discovery
+from avatar.models.causal_graph_definition import Definition
 
 
 class GetNodeEmbedding(Tool):
@@ -136,42 +138,56 @@ class ComputeSimilarity(Tool):
                  chunk_size: int, 
                  chunk_emb_dir: str, 
                  node_emb_dir: str, 
-                 emb_model: str = 'text-embedding-ada-002',
+                 emb_model: str = 'clip-vit-large-patch14',
                  **kwargs):
         assert hasattr(kb, 'get_doc_info'), "kb must have a method 'get_doc_info'"
         super().__init__(kb=kb)
         self.node_emb_dir = node_emb_dir
         self.emb_model = emb_model
         candidate_emb_path = osp.join(node_emb_dir, 'candidate_emb_dict.pt')
+        if not osp.exists(candidate_emb_path):
+            raise FileNotFoundError(f"Candidate embedding file not found at {candidate_emb_path}")
         self.candidate_emb_dict = torch.load(candidate_emb_path)
         self.candidate_ids = self.kb.candidate_ids
         self.get_emb = GetNodeEmbedding(kb, node_emb_dir)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.definition_model = Definition().to(self.device)
+        self.discovery_model = Discovery().to(self.device)
 
     @format_checked
     def __call__(self, query: str, node_ids: List[int]) -> List[float]:
-        """
-        Compute similarity between a query and node information.
-        
-        Args:
-            query (str): The query string.
-            node_ids (List[int]): A list of node IDs to compare against.
-            
-        Returns:
-            List[float]: A list of similarity scores.
-        """
         print(f'compute_similarity - input query {query}, node_ids {len(node_ids)}')
 
         if len(node_ids) == 0:
             return []
+
         query_emb = get_openai_embedding(query, model=self.emb_model).to(self.device)
         print(f'compute_similarity - query emb {query_emb.size()}')
 
-        embs = []
+        embs, images, texts = [], [], []
         for node_id in node_ids:
             embs.append(self.get_emb(node_id))
+            node_info = self.kb.get_doc_info(node_id)
+            images.append(node_info['image'])
+            texts.append(node_info['text'])
+
         embs = torch.cat(embs, dim=0).to(self.device)
+        images = torch.stack(images).to(self.device)
+        texts = torch.stack(texts).to(self.device)
+
+        # 计算余弦相似度
         sim = torch.matmul(query_emb, embs.T).view(-1)
+        sim = sim / torch.norm(query_emb, dim=-1, keepdim=True)
+        sim = sim / torch.norm(embs, dim=-1, keepdim=True)
+
+        # 获取定义模型和发现模型输出
+        definition_out = self.definition_model(images, texts)
+        discovery_out = self.discovery_model(images, texts, definition_out)
+
+        # 融合因果分数
+        causal_score = definition_out['semantic_loss'] * discovery_out['path_strengths'].mean()
+        sim = sim * causal_score
+
         print(f'compute_similarity - sim {sim.size()}')
         return sim.cpu().tolist()
 
@@ -205,35 +221,55 @@ class ComputeQueryNodeSimilarity(Tool):
                  **kwargs):
         assert hasattr(kb, 'get_doc_info'), "kb must have a method 'get_doc_info'"
         super().__init__(kb=kb)
-        self.emb_model = emb_model
         self.node_emb_dir = node_emb_dir
+        self.emb_model = emb_model
         candidate_emb_path = osp.join(node_emb_dir, 'candidate_emb_dict.pt')
+        if not osp.exists(candidate_emb_path):
+            raise FileNotFoundError(f"Candidate embedding file not found at {candidate_emb_path}")
         self.candidate_emb_dict = torch.load(candidate_emb_path)
         self.candidate_ids = self.kb.candidate_ids
         self.get_emb = GetNodeEmbedding(kb, node_emb_dir)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.definition_model = Definition().to(self.device)
+        self.discovery_model = Discovery().to(self.device)
 
     @format_checked
     def __call__(self, query: str, node_ids: List[int]) -> torch.Tensor:
-        """
-        Compute similarity between a query and nodes based on their embeddings.
-        
-        Args:
-            query (str): The query string.
-            node_ids (List[int]): A list of node IDs to compare against.
-            
-        Returns:
-            torch.Tensor: A tensor of similarity scores.
-        """
         print(f'compute_query_node_similarity - input query {query}, node_ids {len(node_ids)}')
+
+        if len(node_ids) == 0:
+            return torch.tensor([])
+
         query_emb = get_openai_embedding(query, model=self.emb_model).to(self.device)
         print(f'compute_query_node_similarity - query emb {query_emb.size()}')
+
+        images, texts = [], []
+        for node_id in node_ids:
+            node_info = self.kb.get_doc_info(node_id)
+            images.append(node_info['image'])
+            texts.append(node_info['text'])
+
+        images = torch.stack(images).to(self.device)
+        texts = torch.stack(texts).to(self.device)
+
+        # 计算因果分数
+        definition_out = self.definition_model(images, texts)
+        discovery_out = self.discovery_model(images, texts, definition_out)
+        final_score = definition_out['semantic_loss'] * discovery_out['path_strengths'].mean()
 
         embs = []
         for node_id in node_ids:
             embs.append(self.get_emb(node_id))
         embs = torch.cat(embs, dim=0).to(self.device)
+
+        # 计算余弦相似度并归一化
         sim = torch.matmul(query_emb, embs.T).view(-1)
+        sim = sim / torch.norm(query_emb, dim=-1, keepdim=True)
+        sim = sim / torch.norm(embs, dim=-1, keepdim=True)
+
+        # 融合因果分数
+        sim = sim * final_score
+
         print(f'compute_query_node_similarity - sim {sim.size()}')
         return sim.cpu()
 
