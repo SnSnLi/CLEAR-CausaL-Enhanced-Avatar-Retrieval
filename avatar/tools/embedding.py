@@ -252,7 +252,7 @@ class ComputeQueryNodeSimilarity(Tool):
         images = torch.stack(images).to(self.device)
         texts = torch.stack(texts).to(self.device)
 
-        # 计算因果分数
+        # 计算总的因果分数
         definition_out = self.definition_model(images, texts)
         discovery_out = self.discovery_model(images, texts, definition_out)
         final_score = definition_out['semantic_loss'] * discovery_out['path_strengths'].mean()
