@@ -181,12 +181,12 @@ class ComputeSimilarity(Tool):
         sim = sim / torch.norm(embs, dim=-1, keepdim=True)
 
         # 获取定义模型和发现模型输出
-        definition_out = self.definition_model(images, texts)
-        discovery_out = self.discovery_model(images, texts, definition_out)
+        
+        discovery_out = self.discovery_model(images, texts)
 
         # 融合因果分数
-        causal_score = definition_out['semantic_loss'] * discovery_out['path_strengths'].mean()
-        sim = sim * causal_score
+        final_score = discovery_out['semantic_loss'] * torch.tensor(discovery_out['edge_weights']).mean()
+        sim = sim * final_score
 
         print(f'compute_similarity - sim {sim.size()}')
         return sim.cpu().tolist()
@@ -252,10 +252,10 @@ class ComputeQueryNodeSimilarity(Tool):
         images = torch.stack(images).to(self.device)
         texts = torch.stack(texts).to(self.device)
 
-        # 计算总的因果分数
-        definition_out = self.definition_model(images, texts)
+        # 计算因果分数
+        
         discovery_out = self.discovery_model(images, texts, definition_out)
-        final_score = definition_out['semantic_loss'] * discovery_out['path_strengths'].mean()
+        final_score = discovery_out['semantic_loss'] * torch.tensor(discovery_out['edge_weights']).mean()
 
         embs = []
         for node_id in node_ids:
