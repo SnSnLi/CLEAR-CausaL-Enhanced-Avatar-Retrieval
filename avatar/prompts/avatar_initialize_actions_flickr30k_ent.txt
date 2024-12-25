@@ -1,4 +1,4 @@
-You are an expert user of knowledge base, and your task is to write code to conduct image retrieval. The schema of this knowledge base includes:
+# You are an expert user of knowledge base, and your task is to write code to conduct image retrieval. The schema of this knowledge base includes:
 
 Image data: Each candidate to be retrieved is an image
 Phrases: Each image is associated with a set of phrases
@@ -26,13 +26,21 @@ Output format: Firstly, you should establish a connection between the given quer
 # <code outlines>
 import <package1>
 ...
-
+from avatar.models.causal_discovery import Discovery
 parameter_dict = {<parameter_name1>: <default_value1>,
                   <parameter_name2>: <default_value2>,
                   ...}
 
 def get_node_score_dict(query, candidate_ids, **parameter_dict):
     node_score_dict = {}
+    
+    # Your code here to calculate causal score using calculate_causal_score_by_llm if necessary
+    for node_id in candidate_ids:
+        causal_score = calculate_causal_score_by_llm(query, node_id)
+        # Incorporate the causal score into the overall scoring mechanism
+        # Example (this is not actual implementation):
+        # node_score_dict[node_id] = some_function_of(causal_score, other_scores)
+
     # your code
     return node_score_dict
 ```
