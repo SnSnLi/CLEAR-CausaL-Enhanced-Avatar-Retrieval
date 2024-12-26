@@ -53,7 +53,7 @@ if __name__ == '__main__':
             kb = Flickr30kEntities(root=args.root_dir)
             qa_dataset = QADataset(name=args.dataset, root=args.root_dir)
         
-        # 初始化模型时传入因果学习参数
+        # 初始化模型同步传入因果学习参数
         model = get_model(args, kb)
         model.parent_pred_path = osp.join(args.output_dir, f'eval/{args.dataset}/VSS/{args.emb_model}/eval_results_test.csv')
         
