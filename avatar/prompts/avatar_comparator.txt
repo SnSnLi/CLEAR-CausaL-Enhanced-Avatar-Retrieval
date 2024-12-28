@@ -2,8 +2,27 @@ After executing the actions on user queries, some queries yielded good results, 
 
 <pos_neg_queries>
 
-Task: First, identify and contrast the patterns of queries that have achieved good results with those that have not. Then, examine the actions to attribute the performance difference to their query patterns. Finally, review the computational logic for any inconsistencies in the previous actions and propose verbal instructions for code modifications to improve performance.
+Task:
+1. Code Structure Analysis:
+   - Examine modality decoupling implementation in Discovery class
+   - Verify feature suppression mechanisms across different modalities
+   - Review integration with causal_discovery module
 
-You should focus on capturing the high-level pattern of the queries relevant to the knowledge base schema. You are strictly prohibited from using specific information, such as a specific brand title, from these examples. 
+2. Query Pattern Analysis:
+   - Identify successful causal inference chains and their characteristics
+   - Analyze failure cases related to modality decoupling or feature suppression
+   - Evaluate if action selection considers query-specific modality features
+
+3. Computational Logic Review:
+   - Validate consistency between modality decoupling and causal score calculation
+   - Check if node_score_dict properly integrates decoupled features
+   - Verify causal path activation patterns in calculate_causal_score_by_llm
+
+4. Implementation Recommendations:
+   - Suggest improvements for modality-specific parameter handling
+   - Propose optimizations for feature suppression thresholds
+   - Recommend enhancements for causal score integration
+
+Focus on high-level patterns relevant to the knowledge base schema. Do not use specific information like brand titles.
 
 Your observations and instructions:
