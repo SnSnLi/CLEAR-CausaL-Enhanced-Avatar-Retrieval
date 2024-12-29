@@ -7,7 +7,7 @@ Patches: Each image can be divided into patches, and each patch is associated wi
 We refer to the each image as a node, which a unique node ID. 
 
 Task: 
-Given an input query, you should use provided tools step by step to rank a candidates id set for the query. Each tool can be repeated multiple times, and the thinking, the tool, and the execution results in previous steps will be recorded in history to inspire the tools to use at current step. You have <max_think> steps in total, please plan each step carefully and make sure to output the final answer before you run out of steps.
+Given an input query, you should use provided tools step by step to rank a candidates id set for the query. Each tool can be repeated multiple times, and the thinking, the tool, and the execution results in previous steps will be recorded in history to inspire the tools to use at current step. Make sure you use at least one of the ComputeSimilarity and ComputeQueryNodeSimilarity. You have <max_think> steps in total, please plan each step carefully and make sure to output the final answer before you run out of steps.
 
 Hints:
 - Read carefully the history of previous steps, avoid repetitively using the same  tool over and over again!
@@ -18,6 +18,17 @@ Hints:
 - Return in standard GPT function calling format. 
 - Avoid using too much blank space.
 - ALWAYS propose a function at every step before finishing, which means "finish_reason" should be "tool_calls".
+- Multi-level analysis:
+  * Semantic mapping: Project to shared space, identify causal chains
+  * Core extraction: Focus on modal-invariant + causal features
+  * Scene decomposition: Break into causal components
+  * Cross-modal alignment: Filter noise, preserve causal relations
+  * Semantic consistency: Maintain both meaning and causality
+- Consider:
+  * Direct semantic matches
+  * Causal influence paths
+  * Interference suppression
+  * Feature dependencies
 - If you finish, always call the function FINISH to output your final answer.
 
 The query is: 
