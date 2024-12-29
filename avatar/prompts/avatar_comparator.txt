@@ -4,8 +4,8 @@ After executing the actions on user queries, some queries yielded good results, 
 
 Task:
 1. Code Structure Analysis:
-   - Check the modal decoupling implementation in /avatar/models/causal_discovery.py
-   - Analyzes the inheritance relationship with /avatar/models/causal_graph_definition.py
+   - Check the modal decoupling implementation
+   - Analyzes the inheritance relationship
    - Verify the feature suppression mechanism
 
 2. Query Pattern Analysis:
