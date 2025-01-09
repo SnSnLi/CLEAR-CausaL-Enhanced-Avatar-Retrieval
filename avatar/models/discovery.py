@@ -8,7 +8,8 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 from torch import nn
-from causal_graph_definition import Definition
+from avatar.models.definition import Definition
+from avatar.models.analysis import CausalMediationAnalyzer
 
 class Relationship:
     def __init__(self, nlp_model=None, clip_model=None, clip_processor=None):
@@ -150,10 +151,22 @@ class Discovery(nn.Module):
 
     def update_causal_relationships(self, features):
         """根据因果关系提示更新边权重"""
+        # 使用因果中介分析优化边权重
+        analyzer = CausalMediationAnalyzer({
+            'graph': features['graph'],
+            'edge_weights': features['graph'].edges(data=True)
+        })
+        mediation_effects = analyzer.calculate_mediation_effects()
+        
+        # 根据中介效应调整边权重
         for (source, target), strength in self.causal_relationships.items():
             if (source, target) in features['graph'].edges():
                 current_weight = features['graph'][source][target]['weight']
-                updated_weight = min(current_weight + strength, 1.0)  
+                # 根据中介效应比例调整权重
+                updated_weight = min(
+                    current_weight + strength * mediation_effects['effect_ratio'], 
+                    1.0
+                )
                 features['graph'][source][target]['weight'] = updated_weight
 
     def forward(self, images, texts):
