@@ -19,15 +19,12 @@ def parse_args():
     parser = argparse.ArgumentParser()
 
     # Dataset and embedding model selection
-    parser.add_argument('--dataset', default='amazon', choices=['amazon', 'prime', 'mag', 'flickr30k_entities'])
-    parser.add_argument('--flickr30k_entities_root', default='/root/onethingai-tmp/avatar/data/flickr30k_entities')
-    parser.add_argument('--emb_model', default='text-embedding-ada-002', 
+    parser.add_argument('--dataset', default='flickr30k_entities', choices=['flickr30k_entities'])
+    parser.add_argument('--flickr30k_entities_root', required=True, help='root/onethingai-tmp/avatar/data/flickr30k_entities')
+    parser.add_argument('--emb_model', default='openai/clip-vit-large-patch14', 
                         choices=[
-                            'text-embedding-ada-002', 
-                            'text-embedding-3-small', 
-                            'text-embedding-3-large',
-                            'openai/clip-vit-large-patch14'
-                            ]
+                            'openai/clip-vit-large-patch14'  
+                        ]
                         )
 
     # Mode settings
@@ -69,7 +66,7 @@ if __name__ == '__main__':
             emb_path = osp.join(emb_dir, f'candidate_emb_dict.pt')
         if args.mode == 'query':
             encoder = GetCLIPTextEmbedding(model_name=args.emb_model, batch_size=args.batch_size)
-            qa_dataset = QADataset(args.dataset, root='/root/onethingai-tmp/avatar/data/flickr30k_entities')
+            qa_dataset = QADataset(args.dataset, root=args.flickr30k_entities_root)
             lst = [qa_dataset[i][1] for i in range(len(qa_dataset))]
             emb_path = osp.join(emb_dir, f'query_emb_dict.pt')
     else:
