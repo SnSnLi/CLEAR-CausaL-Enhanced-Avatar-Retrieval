@@ -20,28 +20,24 @@ The given queries include the following patterns:
 
 Task: Given an input query, you should write code to calculate a `node_score_dict` for <topk_test> node IDs, which are input as a list. These node IDs, referred to as `candidate_ids`, are a subset of node IDs from the knowledge base. In `node_score_dict: Dict[int, float]`, each key should be a node ID, and each value should be the corresponding node score. This score should indicate the likelihood of the node being the correct answer to the query. 
 
-Output format: Firstly, you should establish a connection between the given queries and the query patterns to the schema of the knowledge base. Secondly, generate an outline for the code that will compute the scores for all the candidate nodes provided in the query examples. Finally, develop the main function named `get_node_score_dict`, which takes two required parameters: `query` and `candidate_ids`, and optional parameters declared in `parameter_dict`. Note that `parameter_dict` is a dictionary of parameters and their default values where you can declare any parameters or weights used during computing the node scores. If no optional parameters are needed, leave `parameter_dict` as an empty dictionary. Overall, your output should follow the structure:
+Causal Analysis: The causal score for this task is <causal_score>. This score reflects the strength of causal relationships in the knowledge base and should be incorporated into the node score calculation.
+
+Output format: Firstly, you should establish a connection between the given queries and the query patterns to the schema of the knowledge base. Secondly, generate an outline for the code that will compute the scores for all the candidate nodes provided in the query examples. Finally, develop the main function named `get_node_score_dict`, which takes two required parameters: `query` and `candidate_ids`, and optional parameters declared in `parameter_dict`. Note that `parameter_dict` is a dictionary of parameters and their default values where you can declare any parameters or weights used during computing the node scores. Make sure to use edge_weights. Overall, your output should follow the structure:
 
 ```python
-# <code outlines>
+# <analysis on the feedback and explanations on the code modification>
 import <package1>
 ...
-from avatar.models.causal_discovery import Discovery
+
 parameter_dict = {<parameter_name1>: <default_value1>,
                   <parameter_name2>: <default_value2>,
                   ...}
 
+<other functions>
+
 def get_node_score_dict(query, candidate_ids, **parameter_dict):
     node_score_dict = {}
-    
-    # Your code here to calculate causal score using calculate_causal_score_by_llm if necessary
-    for node_id in candidate_ids:
-        causal_score = calculate_causal_score_by_llm(query, node_id)
-        # Incorporate the causal score into the overall scoring mechanism
-        # Example (this is not actual implementation):
-        # node_score_dict[node_id] = some_function_of(causal_score, other_scores)
-
-    # your code
+    # your code 
     return node_score_dict
 ```
 
