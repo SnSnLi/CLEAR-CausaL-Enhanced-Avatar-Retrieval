@@ -5,7 +5,7 @@ import networkx as nx
 from transformers import CLIPModel, CLIPTokenizer
 import numpy as np
 from typing import Dict, Tuple
-from cmscm import CausalVariable, CMSCM
+from .cmscm import CausalVariable, CMSCM
 
 class Definition(nn.Module):
     def __init__(self, hidden_dim=768, shared_dim=256, alignment_temp=0.07):
@@ -160,11 +160,15 @@ class Definition(nn.Module):
         consistency_loss = F.mse_loss(
             torch.tensor([
                 graph_effects['direct']['img_to_semantic'],
-                graph_effects['direct']['txt_to_semantic']
+                graph_effects['direct']['txt_to_semantic'],
+                graph_effects['indirect']['img_to_scene'],
+                graph_effects['indirect']['txt_to_scene']
             ]),
             torch.tensor([
                 structural_effects['S'].mean().item(),
-                structural_effects['R'].mean().item()
+                structural_effects['R'].mean().item(),
+                structural_effects['Zx'].mean().item(),
+                structural_effects['Zy'].mean().item()
             ])
         )
         
