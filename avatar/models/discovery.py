@@ -11,6 +11,10 @@ from torch import nn
 from avatar.models.definition import Definition
 from avatar.models.analysis import CausalMediationAnalyzer
 
+# 设置数据路径
+annotations_directory = "/root/onethingai-tmp/avatar/data/flickr30k_entities/raw/annotations"
+images_directory = "/root/onethingai-tmp/avatar/data/flickr30k_entities/raw/flickr30k_images"
+
 class Relationship:
     def __init__(self, nlp_model=None, clip_model=None, clip_processor=None):
         self.nlp = nlp_model if nlp_model else spacy.load("en_core_web_sm")
@@ -45,7 +49,6 @@ class Relationship:
         return sentences
 
     def extract_causal_relationships(self, sentences, image_path=None):
-       
         causal_relationships = defaultdict(float)
 
         for sentence in sentences:
@@ -60,7 +63,6 @@ class Relationship:
                     text_embedding = outputs.text_embeds
                     image_embedding = outputs.image_embeds
 
-                    
                 except Exception as e:
                     print(f"Error processing image {image_path}: {e}")
 
@@ -102,33 +104,32 @@ def process_annotations(xml_directory, image_directory, extractor):
 
     return dict(all_causal_relationships)
 
-# 设置数据路径
-annotations_directory = "root/onethingai-tmp/avatar/data/flickr30k_entities/raw/annotations"
-images_directory = "root/onethingai-tmp/avatar/data/flickr30k_entities/raw/flickr30k_images"
-
 class Discovery(nn.Module):
-    def __init__(self, causal_relationships, hidden_dim=768, shared_dim=256, lr=1e-4):
+    def __init__(self, hidden_dim=768, shared_dim=256):
         super().__init__()
-        self.hidden_dim = hidden_dim
-        self.shared_dim = shared_dim
-        
-       
+        # 基础模型
         self.base_model = Definition(hidden_dim, shared_dim)
-
-        # 定义损失函数和优化器
-        self.alignment_temp = 0.07
-        self.optimizer = optim.Adam(self.base_model.parameters(), lr=lr)
-
-        # 边权重预测网络
+        
+        # 分析器
+        self.analyzer = CausalMediationAnalyzer(self.base_model)
+        
+        # 边权重网络
         self.edge_weight_net = nn.Sequential(
             nn.Linear(shared_dim * 2, 128),
             nn.ReLU(),
             nn.Linear(128, 1),
-            nn.Sigmoid()  # 输出一个介于0到1之间的权重值
+            nn.Sigmoid()
         )
-
-        # 初始化因果关系
-        self.causal_relationships = causal_relationships
+        
+        # 优化器
+        self.optimizer = optim.Adam(
+            list(self.base_model.parameters()) + 
+            list(self.edge_weight_net.parameters()),
+            lr=1e-4
+        )
+        
+        # 对齐温度
+        self.alignment_temp = 0.07
 
     def compute_alignment_loss(self, img_feat, txt_feat):
         # 计算对齐损失
@@ -170,35 +171,71 @@ class Discovery(nn.Module):
                 features['graph'][source][target]['weight'] = updated_weight
 
     def forward(self, images, texts):
-        output = self.base_model(images, texts)
-        img_semantic = output['img_semantic']
-        txt_semantic = output['txt_semantic']
-
-        # 计算对齐损失
-        semantic_loss = self.compute_alignment_loss(img_semantic, txt_semantic)
-
-        # 更新边权重
-        self.update_edge_weights(output)
-        weights = [data['weight'] for _, _, data in output['graph'].edges(data=True)]
-
-        output.update({
-            'semantic_loss': semantic_loss,
-            'edge_weights': weights
-        })
-
-        if 'semantic_loss' in output:
-            del output['semantic_loss']
+        # 1. 基础特征提取
+        outputs = self.base_model(images, texts)
         
-        return output
+        # 2. CMSCM分析
+        cmscm_outputs = self.base_model.cmscm.structural_equations(
+            outputs['image'],
+            outputs['text']
+        )
+        
+        # 3. 因果效应分析
+        mediation_effects = self.analyzer.calculate_mediation_effects(
+            graph=outputs['graph'],
+            edge_weights=outputs['graph'].edges(data=True)
+        )
+        
+        # 4. 更新边权重
+        self.update_edge_weights(outputs)
+        weights = [data['weight'] for _, _, data in outputs['graph'].edges(data=True)]
+        
+        # 5. 合并所有输出
+        return {
+            **outputs,
+            'cmscm_outputs': cmscm_outputs,
+            'mediation_effects': mediation_effects,
+            'edge_weights': weights,
+            'direct_effects': mediation_effects['direct'],
+            'indirect_effects': mediation_effects['indirect'],
+            'total_effects': mediation_effects['total']
+        }
+
+    def discover_causal_relations(self, images, texts):
+        outputs = self.forward(images, texts)
+        
+        # 结合图分析和CMSCM的发现
+        discoveries = {
+            'graph_paths': self._analyze_graph_paths(),
+            'structural_relations': self._analyze_structural_relations(outputs),
+            'effects': outputs['mediation_effects']
+        }
+        
+        return discoveries
+
+    def _analyze_structural_relations(self, outputs):
+        cmscm_out = outputs['cmscm_outputs']
+        return {
+            'shared_semantics': cmscm_out['S'],
+            'modality_specific': {
+                'image': cmscm_out['Zx'],
+                'text': cmscm_out['Zy']
+            },
+            'reconstruction': {
+                'image': cmscm_out['X_hat'],
+                'text': cmscm_out['Y_hat']
+            }
+        }
 
 def discovery():
-    
-    extractor = CausalRelationshipExtractor()
-
+    """生成 discovery_output，包含动态计算的因果关系、边权重和中介效应"""
+    extractor = Relationship()
     causal_relationships = process_annotations(annotations_directory, images_directory, extractor)
     
-    return Discovery(causal_relationships)
+    model = Discovery(causal_relationships)
+    
+    # 返回动态计算的 discovery_output
+    return model.get_discovery_output()
 
-
-if __name__ == "__main__":
-    model = discovery()
+# 在模块加载时直接暴露 discovery_output
+discovery_output = discovery()
