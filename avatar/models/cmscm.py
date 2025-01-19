@@ -104,7 +104,7 @@ class CMSCM(nn.Module):
             Zx = self.fzx(X)
             Zy = self.fzy(Y)
             joint = torch.cat([S, Zx, Zy], dim=-1)
-            Y_given_XSZ = self.fy(torch.cat([S, Zy], dim=-1))
+            Y_given_XSZ = self.fy(torch.cat([S, Zy, X], dim=-1))
             effect = (Y_given_XSZ * joint).mean(dim=0)
         return effect
 
