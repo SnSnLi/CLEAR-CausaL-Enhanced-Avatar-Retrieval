@@ -10,11 +10,11 @@ from .cmscm import CausalVariable, CMSCM
 class Definition(nn.Module):
     def __init__(self, hidden_dim=768, shared_dim=256, alignment_temp=0.07):
         super().__init__()
-        # 保持原有基础组件
+        # Preserve the original base components
         self.clip = CLIPModel.from_pretrained("openai/clip-vit-large-patch14")
         self.tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-large-patch14")
         
-       
+        # Modality disentangler for image and text
         self.modality_disentangler = nn.ModuleDict({
             'image': nn.Sequential(
                 nn.Linear(hidden_dim, hidden_dim),
@@ -28,7 +28,7 @@ class Definition(nn.Module):
             )
         })
         
-        
+        # Multi-head attention and modality suppression
         self.multi_head_attention = MultiHeadAttention(embed_dim=hidden_dim, num_heads=8)
         self.modality_suppression = nn.MultiheadAttention(embed_dim=hidden_dim, num_heads=8)
         self.modality_gate = nn.Sequential(
@@ -36,7 +36,7 @@ class Definition(nn.Module):
             nn.Sigmoid()
         )
         
-        # 语义投影和场景分解
+        # Semantic projection and scene decomposition
         self.semantic_projection = nn.Sequential(
             nn.Linear(hidden_dim, shared_dim),
             nn.ReLU(),
@@ -44,18 +44,18 @@ class Definition(nn.Module):
         )
         self.scene_decomposer = HierarchicalSceneDecomposer(shared_dim, hidden_dim)
         
-        # 集成CM-SCM的变量处理模块
-        self.X = CausalVariable(hidden_dim)  # 图像模态
-        self.Y = CausalVariable(hidden_dim)  # 文本模态
-        self.S = CausalVariable(shared_dim)  # 共享语义
+        # Integrated CM-SCM variable processing modules
+        self.X = CausalVariable(hidden_dim)  # Image modality
+        self.Y = CausalVariable(hidden_dim)  # Text modality
+        self.S = CausalVariable(shared_dim)  # Shared semantics
         
         self.cmscm = CMSCM(hidden_dim, shared_dim)
         
-        # 保持原有图结构
+        # Preserve the original graph structure
         self.graph = nx.DiGraph()
         self._initialize_graph()
         
-        # 边权重预测网络
+        # Edge weight prediction network
         self.edge_weight_net = nn.Sequential(
             nn.Linear(shared_dim * 2, 128),
             nn.ReLU(),
@@ -67,7 +67,7 @@ class Definition(nn.Module):
         self.modality_discriminator = ModalityDiscriminator(hidden_dim)
 
     def _initialize_graph(self):
-        """保持原有的图初始化"""
+        """Initialize the graph with predefined nodes and edges."""
         nodes = ['image', 'text', 'semantic', 'scene']
         self.graph.add_nodes_from(nodes)
         base_edges = [
@@ -78,12 +78,12 @@ class Definition(nn.Module):
         self.graph.add_edges_from(base_edges)
         
     def process_features(self, x, modality):
-        """结合原有特征处理和CM-SCM噪声处理"""
-        # 原有的模态解耦
+        """Process features by combining modality disentanglement and CM-SCM noise addition."""
+        # Modality disentanglement
         x_disentangled = self.disentangle_modality(x, modality)
         x_suppressed = self.suppress_modality(x_disentangled)
         
-        # CM-SCM噪声处理
+        # CM-SCM noise addition
         if modality == 'image':
             x_noised = self.X.add_noise(x_suppressed)
         else:
@@ -92,10 +92,11 @@ class Definition(nn.Module):
         return x_noised, x_suppressed
 
     def compute_structural_equations(self, img_feat, txt_feat):
+        """Compute the structural equations for the given image and text features."""
         return self.cmscm.structural_equations(img_feat, txt_feat)
 
     def encode_image(self, image):
-        """增强的图像编码"""
+        """Enhanced image encoding."""
         img_feat = self.clip.get_image_features(image)
         img_noised, img_suppressed = self.process_features(img_feat, 'image')
         img_semantic = self.semantic_projection(img_suppressed)
@@ -103,7 +104,7 @@ class Definition(nn.Module):
         return img_semantic, img_scene, img_noised
 
     def encode_text(self, text):
-        """增强的文本编码"""
+        """Enhanced text encoding."""
         inputs = self.tokenizer(text, return_tensors="pt", padding=True, truncation=True)
         txt_feat = self.clip.get_text_features(**inputs)
         txt_noised, txt_suppressed = self.process_features(txt_feat, 'text')
@@ -112,17 +113,17 @@ class Definition(nn.Module):
         return txt_semantic, txt_scene, txt_noised
 
     def compute_mediation_effects(self, features):
-        """整合CausalMediationAnalyzer和CM-SCM的中介效应计算"""
+        """Integrate CausalMediationAnalyzer and CM-SCM for mediation effect computation."""
         effects = {}
         
-        # 变量映射
-        X = features['img_noised']  # 图像模态
-        Y = features['txt_noised']  # 文本模态
-        S = features['semantic']    # 共享语义
-        Zx = features['img_semantic']  # 图像特定语义
-        Zy = features['txt_semantic']  # 文本特定语义
+        # Variable mapping
+        X = features['img_noised']  # Image modality
+        Y = features['txt_noised']  # Text modality
+        S = features['semantic']    # Shared semantics
+        Zx = features['img_semantic']  # Image-specific semantics
+        Zy = features['txt_semantic']  # Text-specific semantics
         
-        # 1. 图路径分析 (CausalMediationAnalyzer)
+        # 1. Graph path analysis (CausalMediationAnalyzer)
         for edge in self.graph.edges():
             source, target = edge
             if source in features and target in features:
@@ -130,11 +131,11 @@ class Definition(nn.Module):
                 weight = self.edge_weight_net(combined)
                 self.graph[source][target]['weight'] = weight.item()
                 
-        # 2. 结构方程计算 (CM-SCM)
+        # 2. Structural equation computation (CM-SCM)
         struct_outputs = self.compute_structural_equations(X, Y)
         
-        # 3. 双重验证机制
-        # 3.1 图路径效应
+        # 3. Dual-validation mechanism
+        # 3.1 Graph path effects
         graph_effects = {
             'direct': {
                 'img_to_semantic': self.graph['image']['semantic']['weight'],
@@ -148,7 +149,7 @@ class Definition(nn.Module):
             }
         }
         
-        # 3.2 结构方程效应
+        # 3.2 Structural equation effects
         structural_effects = {
             'S': struct_outputs['S'],
             'Zx': struct_outputs['Zx'],
@@ -156,7 +157,7 @@ class Definition(nn.Module):
             'R': struct_outputs['R']
         }
         
-        # 4. 效应一致性验证
+        # 4. Effect consistency validation
         consistency_loss = F.mse_loss(
             torch.tensor([
                 graph_effects['direct']['img_to_semantic'],
@@ -172,7 +173,7 @@ class Definition(nn.Module):
             ])
         )
         
-        # 5. 返回整合结果
+        # 5. Return integrated results
         effects.update({
             'graph_effects': graph_effects,
             'structural_effects': structural_effects,
@@ -182,17 +183,17 @@ class Definition(nn.Module):
         return effects
 
     def forward(self, images, texts):
-        """增强的前向传播"""
-        # 1. 特征编码
+        """Enhanced forward pass."""
+        # 1. Feature encoding
         img_semantic, img_scene, img_noised = self.encode_image(images)
         txt_semantic, txt_scene, txt_noised = self.encode_text(texts)
 
-        # 2. 对抗训练
+        # 2. Adversarial training
         modality_labels = torch.tensor([0] * len(img_semantic) + [1] * len(txt_semantic)).to(img_semantic.device)
         all_features = torch.cat([img_semantic, txt_semantic], dim=0)
         adv_loss = self.adversarial_loss(all_features, modality_labels)
 
-        # 3. 构建特征字典
+        # 3. Build feature dictionary
         features = {
             'image': img_semantic,
             'text': txt_semantic,
@@ -206,10 +207,10 @@ class Definition(nn.Module):
             'txt_noised': txt_noised
         }
 
-        # 4. 计算中介效应
+        # 4. Compute mediation effects
         mediation_effects = self.compute_mediation_effects(features)
 
-        # 5. 返回结果
+        # 5. Return results
         return {
             **features,
             'effects': mediation_effects,
@@ -218,4 +219,5 @@ class Definition(nn.Module):
         }
 
 def definition():
+    """Return an instance of the Definition class."""
     return Definition()
