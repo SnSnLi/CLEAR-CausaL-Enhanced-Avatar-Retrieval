@@ -6,26 +6,26 @@ from .discovery import Discovery
 
 class CausalScoreCalculator:
     """
-    因果分数计算器
-    整合所有相关权重计算，包括：
-    - 直接效应权重
-    - 间接效应权重
-    - 图像质量权重
-    - 短语相关性权重
-    - 语义嵌入相似度
-    - 图结构权重
-    - 语义对齐损失
+    Causal Score Calculator
+    Integrates all relevant weight calculations, including:
+    - Direct effect weight
+    - Indirect effect weight
+    - Image quality weight
+    - Phrase relevance weight
+    - Semantic embedding similarity
+    - Graph structure weight
+    - Semantic alignment loss
     """
     
     def __init__(self, discovery: Discovery):
         """
-        初始化函数
-        :param discovery: Discovery实例，包含所有相关权重信息
+        Initialize the calculator.
+        :param discovery: Discovery instance containing all relevant weight information.
         """
         self.discovery = discovery
         self.analyzer = CausalMediationAnalyzer(discovery)
         
-        # 初始化权重参数
+        # Initialize weight parameters
         self.direct_effect_weight = 0.3
         self.indirect_effect_weight = 0.4
         self.image_quality_weight = 0.2
@@ -34,28 +34,66 @@ class CausalScoreCalculator:
         self.graph_structure_weight = 0.3
         self.semantic_loss_weight = 0.2
         
+        # Initialize CLIP model
+        self.clip = CLIPModel.from_pretrained("openai/clip-vit-large-patch14")
+        self.tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-large-patch14")
+        self.clip.eval()
+        
+    def _calculate_image_quality(self, image: torch.Tensor) -> float:
+        """
+        Calculate image quality score based on CLIP features.
+        """
+        with torch.no_grad():
+            img_feat = self.clip.get_image_features(image)
+            l2_norm = torch.norm(img_feat, p=2)
+            mean_feat = img_feat.mean(dim=0)
+            cosine_sim = F.cosine_similarity(img_feat, mean_feat.unsqueeze(0))
+            return 0.7 * l2_norm + 0.3 * cosine_sim
+
+    def _calculate_phrase_relevance(self, phrase: str, context: str) -> float:
+        """
+        Calculate phrase relevance based on CLIP text encoding.
+        """
+        with torch.no_grad():
+            phrase_input = self.tokenizer(phrase, return_tensors="pt", padding=True, truncation=True)
+            context_input = self.tokenizer(context, return_tensors="pt", padding=True, truncation=True)
+            
+            phrase_feat = self.clip.get_text_features(**phrase_input)
+            context_feat = self.clip.get_text_features(**context_input)
+            
+            return F.cosine_similarity(phrase_feat, context_feat).item()
+
     def calculate_causal_score(self, output: Dict[str, Any]) -> Dict[str, float]:
         """
-        计算综合因果分数
-        :param output: discovery的输出字典
-        :return: 包含所有权重和最终得分的字典
+        Calculate the comprehensive causal score.
+        :param output: Discovery output dictionary.
+        :return: Dictionary containing all weights and the final score.
         """
-        # 获取mediation effects
+        # Calculate image quality and phrase relevance
+        if 'image' in output:
+            output['image_quality'] = self._calculate_image_quality(output['image'])
+        if 'phrase' in output and 'context' in output:
+            output['phrase_relevance'] = self._calculate_phrase_relevance(
+                output['phrase'], 
+                output['context']
+            )
+            
+        # Get mediation effects
         mediation_effects = self.analyzer.calculate_mediation_effects()
         
-        # 计算语义嵌入相似度
+        # Calculate semantic embedding similarity
         semantic_similarity = self._calculate_semantic_similarity(
             output['img_semantic'],
             output['txt_semantic']
         )
         
-        # 计算图结构得分
+        # Calculate graph structure score with node importance
         graph_structure_score = self._calculate_graph_structure_score(
             output['graph'],
             output['edge_weights']
         )
         
-        # 计算各项得分
+        # Calculate individual scores
         direct_score = mediation_effects['direct_effect'] * self.direct_effect_weight
         indirect_score = mediation_effects['indirect_effect'] * self.indirect_effect_weight
         image_quality_score = output.get('image_quality', 1.0) * self.image_quality_weight
@@ -64,7 +102,7 @@ class CausalScoreCalculator:
         graph_structure_score = graph_structure_score * self.graph_structure_weight
         semantic_loss_score = output['semantic_loss'] * self.semantic_loss_weight
         
-        # 计算综合因果分数
+        # Calculate the comprehensive causal score
         causal_score = (
             direct_score + 
             indirect_score + 
@@ -72,7 +110,7 @@ class CausalScoreCalculator:
             phrase_relevance_score +
             semantic_similarity_score +
             graph_structure_score -
-            semantic_loss_score  # 损失值需要减去
+            semantic_loss_score  # Subtract loss value
         )
         
         return {
@@ -89,22 +127,24 @@ class CausalScoreCalculator:
 
     def _calculate_semantic_similarity(self, img_semantic: torch.Tensor, txt_semantic: torch.Tensor) -> float:
         """
-        计算语义嵌入相似度
+        Calculate semantic embedding similarity.
         """
         return torch.cosine_similarity(img_semantic, txt_semantic, dim=-1).mean().item()
 
     def _calculate_graph_structure_score(self, graph: Any, edge_weights: list) -> float:
         """
-        计算图结构得分
+        Calculate graph structure score with node importance.
         """
         if not edge_weights:
             return 0.0
-        return np.mean(edge_weights)
+        # Incorporate node importance into the graph structure score
+        node_importance = [graph.nodes[node].get('importance', 1.0) for node in graph.nodes]
+        return np.mean(edge_weights) * np.mean(node_importance)
 
     def update_weights(self, **kwargs) -> None:
         """
-        动态更新权重参数
-        :param kwargs: 要更新的权重参数
+        Dynamically update weight parameters.
+        :param kwargs: Weight parameters to update.
         """
         for key, value in kwargs.items():
             if hasattr(self, key):
@@ -114,10 +154,10 @@ class CausalScoreCalculator:
 
 def calculate_causal_score(discovery: Discovery, output: Dict[str, Any]) -> Dict[str, float]:
     """
-    因果分数计算函数
-    :param discovery: Discovery实例
-    :param output: discovery的输出字典
-    :return: 包含所有权重和最终得分的字典
+    Causal score calculation function.
+    :param discovery: Discovery instance.
+    :param output: Discovery output dictionary.
+    :return: Dictionary containing all weights and the final score.
     """
     calculator = CausalScoreCalculator(discovery)
     return calculator.calculate_causal_score(output)

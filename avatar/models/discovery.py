@@ -17,13 +17,14 @@ images_directory = "/root/onethingai-tmp/avatar/data/flickr30k_entities/raw/flic
 
 class Relationship:
     def __init__(self, nlp_model=None, clip_model=None, clip_processor=None):
-        # Initialize NLP and CLIP models for text and image processing
         self.nlp = nlp_model if nlp_model else spacy.load("en_core_web_sm")
         self.clip_model = clip_model if clip_model else CLIPModel.from_pretrained("openai/clip-vit-large-patch14")
         self.clip_processor = clip_processor if clip_processor else CLIPProcessor.from_pretrained("openai/clip-vit-large-patch14")
 
     def parse_annotation(self, annotation_xml):
-        # Parse XML annotations to extract sentences and phrases
+        """
+        Parse XML annotations to extract sentences and phrases.
+        """
         root = ET.fromstring(annotation_xml)
         sentences = []
 
@@ -51,13 +52,15 @@ class Relationship:
         return sentences
 
     def extract_causal_relationships(self, sentences, image_path=None):
-        # Extract causal relationships from sentences using NLP and CLIP embeddings
+        """
+        Extract causal relationships from sentences and image-text pairs.
+        """
         causal_relationships = defaultdict(float)
 
         for sentence in sentences:
             doc = self.nlp(sentence['text'])
 
-            # Use CLIP to obtain text and image embeddings
+            # Use CLIP to get text and image embeddings
             if image_path:
                 try:
                     image = Image.open(image_path).convert("RGB")
@@ -69,15 +72,15 @@ class Relationship:
                 except Exception as e:
                     print(f"Error processing image {image_path}: {e}")
 
-            # Traverse dependency tree to identify causal relationships
+            # Traverse dependency tree to find causal relationships
             for token in doc:
-                if token.dep_ == 'ROOT':  # Identify the main verb of the sentence
+                if token.dep_ == 'ROOT':  # Find the main verb of the sentence
                     subject = None
                     obj = None
                     for child in token.children:
                         if child.dep_ == 'nsubj':  # Subject
                             subject = child.text
-                        elif child.dep_ == 'dobj' or child.dep_ == 'pobj':  # Direct object or prepositional object
+                        elif child.dep_ == 'dobj' or child.dep_ == 'pobj':  # Direct or prepositional object
                             obj = child.text
 
                     if subject and obj:
@@ -87,7 +90,9 @@ class Relationship:
         return dict(causal_relationships)
 
 def process_annotations(xml_directory, image_directory, extractor):
-    """Process all XML files in the specified directory to extract causal relationships"""
+    """
+    Process all XML files in the directory to extract causal relationships.
+    """
     all_causal_relationships = defaultdict(float)
 
     for filename in os.listdir(xml_directory):
@@ -97,7 +102,7 @@ def process_annotations(xml_directory, image_directory, extractor):
                 annotation_xml = file.read()
 
             sentences = extractor.parse_annotation(annotation_xml)
-            # Construct image path
+            # Build image path
             image_filename = os.path.splitext(filename)[0] + ".jpg"
             image_path = os.path.join(image_directory, image_filename) if os.path.exists(os.path.join(image_directory, image_filename)) else None
 
@@ -110,10 +115,10 @@ def process_annotations(xml_directory, image_directory, extractor):
 class Discovery(nn.Module):
     def __init__(self, hidden_dim=768, shared_dim=256):
         super().__init__()
-        # Base model for feature extraction
+        # Base model
         self.base_model = Definition(hidden_dim, shared_dim)
         
-        # Causal mediation analyzer
+        # Analyzer
         self.analyzer = CausalMediationAnalyzer(self.base_model)
         
         # Edge weight network
@@ -131,18 +136,23 @@ class Discovery(nn.Module):
             lr=1e-4
         )
         
-        # Alignment temperature for contrastive learning
+        # Alignment temperature
         self.alignment_temp = 0.07
 
     def compute_alignment_loss(self, img_feat, txt_feat):
-        # Compute alignment loss for contrastive learning
+        """
+        Compute alignment loss between image and text features.
+        """
         similarity = torch.matmul(img_feat, txt_feat.T) / self.alignment_temp
         labels = torch.arange(similarity.size(0)).to(similarity.device)
         loss = F.cross_entropy(similarity, labels)
         return loss
 
     def update_edge_weights(self, features):
-        """Dynamically update edge weights based on feature representations"""
+        """
+        Dynamically update edge weights based on node importance and causal relationships.
+        """
+        # Update edge weights using the edge weight network
         for edge in features['graph'].edges():
             source, target = edge
             if source in features and target in features:
@@ -154,7 +164,9 @@ class Discovery(nn.Module):
         self.update_causal_relationships(features)
 
     def update_causal_relationships(self, features):
-        """Update edge weights based on causal relationship hints"""
+        """
+        Update edge weights based on causal relationships and node importance.
+        """
         # Use causal mediation analysis to optimize edge weights
         analyzer = CausalMediationAnalyzer({
             'graph': features['graph'],
@@ -162,34 +174,37 @@ class Discovery(nn.Module):
         })
         mediation_effects = analyzer.calculate_mediation_effects()
         
-        # Adjust edge weights based on mediation effects
+        # Adjust edge weights based on mediation effects and node importance
         for (source, target), strength in self.causal_relationships.items():
             if (source, target) in features['graph'].edges():
                 current_weight = features['graph'][source][target]['weight']
-                # Update weight based on mediation effect ratio
+                # Adjust weight based on mediation effect ratio and node importance
                 updated_weight = min(
-                    current_weight + strength * mediation_effects['effect_ratio'], 
+                    current_weight + strength * mediation_effects['effect_ratio'] * features['graph'].nodes[source].get('importance', 1.0), 
                     1.0
                 )
                 features['graph'][source][target]['weight'] = updated_weight
 
     def forward(self, images, texts):
-        # 1. Extract base features
+        """
+        Forward pass with node importance and edge weight updates.
+        """
+        # 1. Base feature extraction
         outputs = self.base_model(images, texts)
         
-        # 2. Perform CMSCM analysis
+        # 2. CMSCM analysis
         cmscm_outputs = self.base_model.cmscm.structural_equations(
             outputs['image'],
             outputs['text']
         )
         
-        # 3. Analyze causal mediation effects
+        # 3. Causal effect analysis
         mediation_effects = self.analyzer.calculate_mediation_effects(
             graph=outputs['graph'],
             edge_weights=outputs['graph'].edges(data=True)
         )
         
-        # 4. Update edge weights
+        # 4. Update edge weights with node importance
         self.update_edge_weights(outputs)
         weights = [data['weight'] for _, _, data in outputs['graph'].edges(data=True)]
         
@@ -205,9 +220,12 @@ class Discovery(nn.Module):
         }
 
     def discover_causal_relations(self, images, texts):
+        """
+        Discover causal relations using graph analysis and CMSCM.
+        """
         outputs = self.forward(images, texts)
         
-        # Combine graph analysis and CMSCM findings
+        # Combine graph analysis and CMSCM discoveries
         discoveries = {
             'graph_paths': self._analyze_graph_paths(),
             'structural_relations': self._analyze_structural_relations(outputs),
@@ -217,6 +235,9 @@ class Discovery(nn.Module):
         return discoveries
 
     def _analyze_structural_relations(self, outputs):
+        """
+        Analyze structural relations from CMSCM outputs.
+        """
         cmscm_out = outputs['cmscm_outputs']
         return {
             'shared_semantics': cmscm_out['S'],
@@ -231,7 +252,9 @@ class Discovery(nn.Module):
         }
 
 def discovery():
-    """Generate discovery_output containing dynamically computed causal relationships, edge weights, and mediation effects"""
+    """
+    Generate discovery_output with dynamically computed causal relationships, edge weights, and mediation effects.
+    """
     extractor = Relationship()
     causal_relationships = process_annotations(annotations_directory, images_directory, extractor)
     
