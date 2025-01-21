@@ -71,7 +71,7 @@ class PromptGenerator:
             
             # Adjust strength based on effect ratio
             effect_ratio = mediation_effects.get('effect_ratio', 0.5)
-            rel['strength'] = rel['strength'] * (1 + effect_ratio * 0.2)
+            rel['strength'] = rel['strength'] * (1 + node_importance[cause] + node_importance[effect])
             
         # Extract key variables with their causal importance
         insights['key_variables'] = self._identify_key_variables()
@@ -97,7 +97,7 @@ class PromptGenerator:
         # Combine centrality and total effect to identify key variables
         for node in centrality_scores:
             # Calculate a combined score (e.g., centrality * total effect)
-            combined_score = centrality_scores[node] * total_effects.get(node, 1.0)
+            combined_score = centrality_scores[node] * total_effects.get(node, 1.0) * node_importance[node]
             
             # If the combined score is above a threshold, consider it a key variable
             if combined_score > 0.5:  # Adjust threshold as needed
@@ -157,6 +157,7 @@ class PromptGenerator:
             The causal score for the node.
         """
         score = 0.0
+        score += node_importance[node] * 0.5
         
         # 1. Check if the node is a key variable
         if node in causal_insights['key_variables']:
@@ -392,16 +393,19 @@ class PromptGenerator:
                 f"  * Effect Ratio: {insights['mediation_effects']['effect_ratio']:.2f}\n"
             )
         
-        # Add key variables with causal importance
+        # Add key variables with causal importance       
         if insights['key_variables']:
             section += "- Key Variables with Causal Importance:\n"
             for var in insights['key_variables']:
-                # Calculate importance score based on connected relationships
-                importance = sum(
+                # Calculate importance score based on connected relationships and node importance
+                relationship_importance = sum(
                     rel['strength'] for rel in insights['causal_relationships']
                     if var in [rel['cause'], rel['effect']]
                 )
-                section += f"  * {var} (importance: {importance:.2f})\n"
+                # Combine relationship importance with node importance
+                total_importance = relationship_importance * node_importance.get(var, 1.0)
+                section += f"  * {var} (importance: {total_importance:.2f})\n"
+        
         
         return section
 
@@ -448,21 +452,29 @@ class PromptGenerator:
                     "focus on direct causal paths\n"
                 )
         
-        # Add key variable guidance with weights
+        # Add key variable guidance with weights      
         if insights['key_variables']:
             section += "- Key Variable Prioritization:\n"
+            # Sort key variables by node importance and relationship strength
             sorted_vars = sorted(
                 insights['key_variables'],
-                key=lambda var: sum(
-                    rel['strength'] for rel in insights['causal_relationships']
-                    if var in [rel['cause'], rel['effect']]
+                key=lambda var: (
+                    node_importance.get(var, 1.0) *  # Node importance
+                    sum(  # Relationship strength
+                        rel['strength'] for rel in insights['causal_relationships']
+                        if var in [rel['cause'], rel['effect']]
+                    )
                 ),
                 reverse=True
             )
             for var in sorted_vars:
-                importance = sum(
-                    rel['strength'] for rel in insights['causal_relationships']
-                    if var in [rel['cause'], rel['effect']]
+                # Calculate importance based on both node importance and relationship strength
+                importance = (
+                    node_importance.get(var, 1.0) *
+                    sum(
+                        rel['strength'] for rel in insights['causal_relationships']
+                        if var in [rel['cause'], rel['effect']]
+                    )
                 )
                 section += f"  * {var} (importance: {importance:.2f})\n"
         
