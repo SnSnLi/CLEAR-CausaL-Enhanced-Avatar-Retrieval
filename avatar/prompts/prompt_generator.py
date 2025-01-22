@@ -38,12 +38,7 @@ class PromptGenerator:
                 f.write(self.template_backup[template_path])
 
     def _extract_causal_insights(self) -> Dict[str, Any]:
-        """
-        Extract key causal insights from discovery and analysis outputs
         
-        Returns:
-            Dictionary containing extracted causal insights with weights
-        """
         insights = {}
         
         # Extract and process causal relationships with weights
@@ -54,7 +49,8 @@ class PromptGenerator:
                 'effect': rel[1],
                 'strength': self.discovery_output['edge_weights'][i],
                 'direct_effect': 0.0,
-                'indirect_effect': 0.0
+                'indirect_effect': 0.0,
+                'counterfactual_effect': 0.0  # 新增反事实效应
             }
             for i, rel in enumerate(raw_relationships)
         ]
@@ -69,6 +65,11 @@ class PromptGenerator:
             rel['direct_effect'] = mediation_effects.get('direct_effect', 0.0)
             rel['indirect_effect'] = mediation_effects.get('indirect_effect', 0.0)
             
+            
+            if 'counterfactual_results' in self.discovery_output:
+                counterfactual_effects = self.discovery_output['counterfactual_results'].get('causal_effects', {})
+                rel['counterfactual_effect'] = counterfactual_effects.get('total_effect', 0.0)
+            
             # Adjust strength based on effect ratio
             effect_ratio = mediation_effects.get('effect_ratio', 0.5)
             rel['strength'] = rel['strength'] * (1 + node_importance[cause] + node_importance[effect])
@@ -76,6 +77,10 @@ class PromptGenerator:
         # Extract key variables with their causal importance
         insights['key_variables'] = self._identify_key_variables()
         insights['mediation_effects'] = mediation_effects
+        
+      
+        if 'counterfactual_results' in self.discovery_output:
+            insights['counterfactual_results'] = self.discovery_output['counterfactual_results']
         
         return insights
 
@@ -359,16 +364,7 @@ class PromptGenerator:
         
         return prompt
 
-    def _generate_discovery_section(self, insights: Dict[str, Any]) -> str:
-        """
-        Generate discovery insights section with causal weights
-        
-        Args:
-            insights: Extracted causal insights with weights
-        
-        Returns:
-            Formatted discovery section string with causal weights
-        """
+   def _generate_discovery_section(self, insights: Dict[str, Any]) -> str:
         section = "### Discovery Insights with Causal Weights\n"
         section += "Based on the causal analysis, the following key insights were discovered:\n"
         
@@ -380,7 +376,8 @@ class PromptGenerator:
                     f"  * {rel['cause']} → {rel['effect']} "
                     f"(strength: {rel['strength']:.2f}, "
                     f"direct: {rel['direct_effect']:.2f}, "
-                    f"indirect: {rel['indirect_effect']:.2f})\n"
+                    f"indirect: {rel['indirect_effect']:.2f}, "
+                    f"counterfactual: {rel.get('counterfactual_effect', 0.0):.2f})\n"  # 新增反事实效应
                 )
         
         # Add mediation effects with weights
@@ -391,6 +388,14 @@ class PromptGenerator:
                 f"  * Indirect Effect: {insights['mediation_effects']['indirect_effect']:.2f}\n"
                 f"  * Total Effect: {insights['mediation_effects']['total_effect']:.2f}\n"
                 f"  * Effect Ratio: {insights['mediation_effects']['effect_ratio']:.2f}\n"
+            )
+        
+        # 新增：添加反事实分析结果
+        if 'counterfactual_results' in insights:
+            section += "- Counterfactual Analysis Results:\n"
+            counterfactual_effects = insights['counterfactual_results'].get('causal_effects', {})
+            section += (
+                f"  * Total Counterfactual Effect: {counterfactual_effects.get('total_effect', 0.0):.2f}\n"
             )
         
         # Add key variables with causal importance       
@@ -406,76 +411,76 @@ class PromptGenerator:
                 total_importance = relationship_importance * node_importance.get(var, 1.0)
                 section += f"  * {var} (importance: {total_importance:.2f})\n"
         
-        
         return section
 
     def _generate_reasoning_section(self, insights: Dict[str, Any]) -> str:
-        """
-        Generate reasoning guidelines with causal weights
-        
-        Args:
-            insights: Extracted causal insights with weights
-        
-        Returns:
-            Formatted reasoning section string with causal guidance
-        """
-        section = "### Causal Reasoning Guidelines\n"
-        section += "When comparing actions, consider the following causal factors:\n"
-        
-        # Add weighted causal reasoning
-        if insights['causal_relationships']:
-            section += "- Weighted Causal Reasoning:\n"
-            for rel in insights['causal_relationships']:
-                if rel['direct_effect'] > rel['indirect_effect']:
-                    reasoning = (
-                        f"  * Direct path from {rel['cause']} to {rel['effect']} is stronger "
-                        f"(direct: {rel['direct_effect']:.2f} > indirect: {rel['indirect_effect']:.2f})\n"
-                    )
-                else:
-                    reasoning = (
-                        f"  * Indirect path from {rel['cause']} to {rel['effect']} is stronger "
-                        f"(indirect: {rel['indirect_effect']:.2f} > direct: {rel['direct_effect']:.2f})\n"
-                    )
-                section += reasoning
-        
-        # Add mediation effect guidance
-        if insights['mediation_effects']:
-            effect_ratio = insights['mediation_effects']['effect_ratio']
-            if effect_ratio > 0.5:
-                section += (
-                    f"- Indirect effects dominate (ratio: {effect_ratio:.2f}), "
-                    "focus on mediator variables\n"
+    section = "### Causal Reasoning Guidelines\n"
+    section += "When comparing actions, consider the following causal factors:\n"
+    
+    # Add weighted causal reasoning
+    if insights['causal_relationships']:
+        section += "- Weighted Causal Reasoning:\n"
+        for rel in insights['causal_relationships']:
+            if rel['direct_effect'] > rel['indirect_effect']:
+                reasoning = (
+                    f"  * Direct path from {rel['cause']} to {rel['effect']} is stronger "
+                    f"(direct: {rel['direct_effect']:.2f} > indirect: {rel['indirect_effect']:.2f})\n"
                 )
             else:
-                section += (
-                    f"- Direct effects dominate (ratio: {1 - effect_ratio:.2f}), "
-                    "focus on direct causal paths\n"
+                reasoning = (
+                    f"  * Indirect path from {rel['cause']} to {rel['effect']} is stronger "
+                    f"(indirect: {rel['indirect_effect']:.2f} > direct: {rel['direct_effect']:.2f})\n"
                 )
-        
-        # Add key variable guidance with weights      
-        if insights['key_variables']:
-            section += "- Key Variable Prioritization:\n"
-            # Sort key variables by node importance and relationship strength
-            sorted_vars = sorted(
-                insights['key_variables'],
-                key=lambda var: (
-                    node_importance.get(var, 1.0) *  # Node importance
-                    sum(  # Relationship strength
-                        rel['strength'] for rel in insights['causal_relationships']
-                        if var in [rel['cause'], rel['effect']]
-                    )
-                ),
-                reverse=True
+            section += reasoning
+    
+    
+    if 'counterfactual_results' in insights:
+        counterfactual_effects = insights['counterfactual_results'].get('causal_effects', {})
+        section += "- Counterfactual Reasoning:\n"
+        section += (
+            f"  * If certain variables were changed, the total effect would be {counterfactual_effects.get('total_effect', 0.0):.2f}\n"
+        )
+    
+    # Add mediation effect guidance
+    if insights['mediation_effects']:
+        effect_ratio = insights['mediation_effects']['effect_ratio']
+        if effect_ratio > 0.5:
+            section += (
+                f"- Indirect effects dominate (ratio: {effect_ratio:.2f}), "
+                "focus on mediator variables\n"
             )
-            for var in sorted_vars:
-                # Calculate importance based on both node importance and relationship strength
-                importance = (
-                    node_importance.get(var, 1.0) *
-                    sum(
-                        rel['strength'] for rel in insights['causal_relationships']
-                        if var in [rel['cause'], rel['effect']]
-                    )
+        else:
+            section += (
+                f"- Direct effects dominate (ratio: {1 - effect_ratio:.2f}), "
+                "focus on direct causal paths\n"
+            )
+    
+    # Add key variable guidance with weights      
+    if insights['key_variables']:
+        section += "- Key Variable Prioritization:\n"
+        # Sort key variables by node importance and relationship strength
+        sorted_vars = sorted(
+            insights['key_variables'],
+            key=lambda var: (
+                node_importance.get(var, 1.0) *  # Node importance
+                sum(  # Relationship strength
+                    rel['strength'] for rel in insights['causal_relationships']
+                    if var in [rel['cause'], rel['effect']]
                 )
-                section += f"  * {var} (importance: {importance:.2f})\n"
+            ),
+            reverse=True
+        )
+        for var in sorted_vars:
+            # Calculate importance based on both node importance and relationship strength
+            importance = (
+                node_importance.get(var, 1.0) *
+                sum(
+                    rel['strength'] for rel in insights['causal_relationships']
+                    if var in [rel['cause'], rel['effect']]
+                )
+            )
+            section += f"  * {var} (importance: {importance:.2f})\n"
+    
+    return section
         
         return section
