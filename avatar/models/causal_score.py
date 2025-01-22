@@ -15,6 +15,7 @@ class CausalScoreCalculator:
     - Semantic embedding similarity
     - Graph structure weight
     - Semantic alignment loss
+    - Counterfactual effect weight
     """
     
     def __init__(self, discovery: Discovery):
@@ -33,6 +34,7 @@ class CausalScoreCalculator:
         self.semantic_similarity_weight = 0.4
         self.graph_structure_weight = 0.3
         self.semantic_loss_weight = 0.2
+        self.counterfactual_weight = 0.5  # New weight for counterfactual analysis
         
         # Initialize CLIP model
         self.clip = CLIPModel.from_pretrained("openai/clip-vit-large-patch14")
@@ -93,6 +95,11 @@ class CausalScoreCalculator:
             output['edge_weights']
         )
         
+        # Calculate counterfactual effect score
+        counterfactual_score = self._calculate_counterfactual_score(
+            output.get('counterfactual_results', {})
+        )
+        
         # Calculate individual scores
         direct_score = mediation_effects['direct_effect'] * self.direct_effect_weight
         indirect_score = mediation_effects['indirect_effect'] * self.indirect_effect_weight
@@ -101,6 +108,7 @@ class CausalScoreCalculator:
         semantic_similarity_score = semantic_similarity * self.semantic_similarity_weight
         graph_structure_score = graph_structure_score * self.graph_structure_weight
         semantic_loss_score = output['semantic_loss'] * self.semantic_loss_weight
+        counterfactual_score = counterfactual_score * self.counterfactual_weight  # Add counterfactual score
         
         # Calculate the comprehensive causal score
         causal_score = (
@@ -110,7 +118,8 @@ class CausalScoreCalculator:
             phrase_relevance_score +
             semantic_similarity_score +
             graph_structure_score -
-            semantic_loss_score  # Subtract loss value
+            semantic_loss_score +  # Subtract loss value
+            counterfactual_score  # Add counterfactual effect
         )
         
         return {
@@ -122,6 +131,7 @@ class CausalScoreCalculator:
             'semantic_similarity': semantic_similarity_score,
             'graph_structure': graph_structure_score,
             'semantic_loss': semantic_loss_score,
+            'counterfactual_score': counterfactual_score,  # Add counterfactual score
             'mediation_effects': mediation_effects
         }
 
@@ -140,6 +150,17 @@ class CausalScoreCalculator:
         # Incorporate node importance into the graph structure score
         node_importance = [graph.nodes[node].get('importance', 1.0) for node in graph.nodes]
         return np.mean(edge_weights) * np.mean(node_importance)
+
+    def _calculate_counterfactual_score(self, counterfactual_results: Dict[str, Any]) -> float:
+        """
+        Calculate counterfactual effect score based on counterfactual analysis results.
+        """
+        if not counterfactual_results:
+            return 0.0
+        
+        # Use the total effect from counterfactual analysis as the score
+        total_effect = counterfactual_results.get('causal_effects', {}).get('total_effect', 0.0)
+        return total_effect
 
     def update_weights(self, **kwargs) -> None:
         """
