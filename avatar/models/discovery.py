@@ -208,7 +208,10 @@ class Discovery(nn.Module):
         self.update_edge_weights(outputs)
         weights = [data['weight'] for _, _, data in outputs['graph'].edges(data=True)]
         
-        # 5. Combine all outputs
+        # 5. Perform counterfactual analysis
+        counterfactual_results = self.base_model.counterfactual_analysis(images, texts)
+        
+        # 6. Combine all outputs
         return {
             **outputs,
             'cmscm_outputs': cmscm_outputs,
@@ -216,7 +219,8 @@ class Discovery(nn.Module):
             'edge_weights': weights,
             'direct_effects': mediation_effects['direct'],
             'indirect_effects': mediation_effects['indirect'],
-            'total_effects': mediation_effects['total']
+            'total_effects': mediation_effects['total'],
+            'counterfactual_results': counterfactual_results
         }
 
     def discover_causal_relations(self, images, texts):
@@ -229,7 +233,8 @@ class Discovery(nn.Module):
         discoveries = {
             'graph_paths': self._analyze_graph_paths(),
             'structural_relations': self._analyze_structural_relations(outputs),
-            'effects': outputs['mediation_effects']
+            'effects': outputs['mediation_effects'],
+            'counterfactual_results': outputs['counterfactual_results']
         }
         
         return discoveries
