@@ -115,6 +115,26 @@ class Definition(nn.Module):
         self.similarity_threshold = 0.8  # Threshold for semantic similarity
         self.semantic_importance_scale = 1.5  # Scaling factor for semantic node importance
 
+        # 新增反事实分析组件
+        self.cf_generator = nn.ModuleDict({
+            'image': nn.Sequential(
+                nn.Linear(shared_dim, shared_dim),
+                nn.ReLU(),
+                nn.Linear(shared_dim, shared_dim)
+            ),
+            'text': nn.Sequential(
+                nn.Linear(shared_dim, shared_dim),
+                nn.ReLU(),
+                nn.Linear(shared_dim, shared_dim)
+            )
+        })
+        
+        self.impact_estimator = nn.Sequential(
+            nn.Linear(shared_dim * 2, shared_dim),
+            nn.ReLU(),
+            nn.Linear(shared_dim, 1)
+        )
+
     def _initialize_graph(self):
         """
         Initialize the causal graph with nodes and base edges.
@@ -282,6 +302,121 @@ class Definition(nn.Module):
         
         return effects
 
+    def modify_scene(self, scene, intervention_nodes):
+        """生成反事实场景
+        Args:
+            scene: 原始场景表示
+            intervention_nodes: 需要干预的节点列表
+        """
+        cf_scene = scene.clone()
+        
+        # 对选定节点进行干预
+        for node in intervention_nodes:
+            node_feat = scene[node]
+            # 生成反事实特征
+            cf_feat = self.cf_generator[node.modality](node_feat)
+            cf_scene[node] = cf_feat
+            
+        # 传播干预效果
+        cf_scene = self.propagate_intervention(cf_scene, intervention_nodes)
+        return cf_scene
+        
+    def propagate_intervention(self, scene, source_nodes):
+        """传播干预效果到相关节点"""
+        affected_nodes = self.get_descendants(scene, source_nodes)
+        
+        for node in affected_nodes:
+            parents = self.get_parents(scene, node)
+            # 根据父节点更新当前节点
+            node.feature = self.update_node(
+                parents_features=[p.feature for p in parents]
+            )
+        return scene
+
+    def compare_scenes(self, original, counterfactual):
+        """对比原始和反事实场景
+        Returns:
+            dict: 包含直接效应、间接效应等指标
+        """
+        orig_img, orig_txt = original
+        cf_img, cf_txt = counterfactual
+        
+        # 计算直接效应
+        direct_effect = self.compute_direct_effect(
+            orig_img, orig_txt, cf_img, cf_txt
+        )
+        
+        # 计算间接效应
+        indirect_effect = self.compute_indirect_effect(
+            orig_img, orig_txt, cf_img, cf_txt
+        )
+        
+        # 计算总效应
+        total_effect = direct_effect + indirect_effect
+        
+        return {
+            "direct_effect": direct_effect,
+            "indirect_effect": indirect_effect, 
+            "total_effect": total_effect
+        }
+
+    def counterfactual_analysis(self, image, text, target_nodes=None):
+        """主反事实分析流程"""
+        # 1. 获取原始场景表示
+        img_sem, img_scene, _ = self.encode_image(image)
+        txt_sem, txt_scene, _ = self.encode_text(text)
+        
+        # 2. 选择干预节点
+        if target_nodes is None:
+            target_nodes = self.select_intervention_nodes(img_scene, txt_scene)
+            
+        # 3. 生成反事实场景
+        cf_img_scene = self.modify_scene(img_scene, target_nodes)
+        cf_txt_scene = self.modify_scene(txt_scene, target_nodes)
+        
+        # 4. 对比分析
+        causal_effects = self.compare_scenes(
+            original=(img_scene, txt_scene),
+            counterfactual=(cf_img_scene, cf_txt_scene)
+        )
+        
+        # 5. 验证因果关系
+        causal_validation = self.validate_causality(
+            original=(img_scene, txt_scene),
+            counterfactual=(cf_img_scene, cf_txt_scene),
+            effects=causal_effects
+        )
+        
+        return {
+            "causal_effects": causal_effects,
+            "validation": causal_validation,
+            "counterfactual_scenes": (cf_img_scene, cf_txt_scene)
+        }
+
+    def validate_causality(self, original, counterfactual, effects):
+        """验证因果关系的合理性"""
+        orig_img, orig_txt = original
+        cf_img, cf_txt = counterfactual
+        
+        # 检查效应大小
+        effect_magnitude = torch.abs(effects["total_effect"])
+        
+        # 检查语义一致性
+        semantic_consistency = self.check_semantic_consistency(
+            orig_img, cf_img, orig_txt, cf_txt
+        )
+        
+        # 检查结构合理性
+        structural_validity = self.check_structural_validity(
+            orig_img, cf_img, orig_txt, cf_txt
+        )
+        
+        return {
+            "effect_magnitude": effect_magnitude,
+            "semantic_consistency": semantic_consistency,
+            "structural_validity": structural_validity
+        }
+
     def forward(self, images, texts):
         """
         Enhanced forward pass with scene analysis and attention-based node importance.
@@ -313,12 +448,15 @@ class Definition(nn.Module):
         # 5. Compute mediation effects
         mediation_effects = self.compute_mediation_effects(features)
 
-        # 6. Return results
+        # 6. Perform counterfactual analysis
+        counterfactual_results = self.counterfactual_analysis(images, texts)
+
+        # 7. Return results
         return {
             **features,
             'effects': mediation_effects,
             'graph': self.graph,
-            'adv_loss': adv_loss
+            'counterfactual_results': counterfactual_results
         }
 
 def definition():
