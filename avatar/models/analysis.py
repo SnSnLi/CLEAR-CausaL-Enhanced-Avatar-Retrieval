@@ -23,7 +23,7 @@ class CausalMediationAnalyzer:
 
     def calculate_mediation_effects(self) -> Dict[str, Any]:
         """
-        Calculates mediation effects by integrating graph path analysis and CMSCM structural equations.
+        Calculates mediation effects by integrating graph path analysis, CMSCM structural equations, and counterfactual analysis.
         :return: A dictionary containing mediation effect values.
         """
         if not isinstance(self.graph, nx.DiGraph):
@@ -44,7 +44,12 @@ class CausalMediationAnalyzer:
             self.definition.Y
         )
 
-        # 4. Dual verification mechanism
+        # 4. Counterfactual analysis
+        counterfactual_results = self.definition.counterfactual_analysis(
+            self.definition.X, self.definition.Y
+        )
+
+        # 5. Dual verification mechanism
         consistency_loss = F.mse_loss(
             torch.tensor([
                 graph_effects['direct'],
@@ -56,7 +61,7 @@ class CausalMediationAnalyzer:
             ])
         )
 
-        # 5. Combine results
+        # 6. Combine results
         total_effect = (
             graph_effects['direct'] +
             graph_effects['indirect'] +
@@ -69,7 +74,8 @@ class CausalMediationAnalyzer:
             'struct_effects': struct_effects,
             'total_effect': total_effect,
             'consistency_loss': consistency_loss.item(),
-            'effect_ratio': (graph_effects['indirect'] + struct_effects['indirect']) / total_effect
+            'effect_ratio': (graph_effects['indirect'] + struct_effects['indirect']) / total_effect,
+            'counterfactual_results': counterfactual_results  # Add counterfactual analysis results
         }
 
         return self.mediation_effects
