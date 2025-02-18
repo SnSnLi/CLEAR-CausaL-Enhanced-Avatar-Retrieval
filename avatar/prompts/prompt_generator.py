@@ -377,7 +377,7 @@ class PromptGenerator:
                     f"(strength: {rel['strength']:.2f}, "
                     f"direct: {rel['direct_effect']:.2f}, "
                     f"indirect: {rel['indirect_effect']:.2f}, "
-                    f"counterfactual: {rel.get('counterfactual_effect', 0.0):.2f})\n"  # 新增反事实效应
+                    f"counterfactual: {rel.get('counterfactual_effect', 0.0):.2f})\n"  
                 )
         
         # Add mediation effects with weights
@@ -390,7 +390,7 @@ class PromptGenerator:
                 f"  * Effect Ratio: {insights['mediation_effects']['effect_ratio']:.2f}\n"
             )
         
-        # 新增：添加反事实分析结果
+        
         if 'counterfactual_results' in insights:
             section += "- Counterfactual Analysis Results:\n"
             counterfactual_effects = insights['counterfactual_results'].get('causal_effects', {})
