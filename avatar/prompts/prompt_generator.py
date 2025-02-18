@@ -360,8 +360,7 @@ class PromptGenerator:
         prompt = prompt.replace('<discovery_insights>', discovery_section)
         prompt = prompt.replace('<reasoning_guidelines>', reasoning_section)
         prompt = prompt.replace('<improvement_suggestions>', improvement_section)
-        prompt += causal_score_reminder  # Add the reminder to the prompt
-        
+        prompt += causal_score_reminder  # Add the reminder to the prompt       
         return prompt
 
    def _generate_discovery_section(self, insights: Dict[str, Any]) -> str:
