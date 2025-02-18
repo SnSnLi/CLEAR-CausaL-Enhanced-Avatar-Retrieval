@@ -50,7 +50,7 @@ class PromptGenerator:
                 'strength': self.discovery_output['edge_weights'][i],
                 'direct_effect': 0.0,
                 'indirect_effect': 0.0,
-                'counterfactual_effect': 0.0  # 新增反事实效应
+                'counterfactual_effect': 0.0 
             }
             for i, rel in enumerate(raw_relationships)
         ]
